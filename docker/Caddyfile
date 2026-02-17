@@ -1,0 +1,12 @@
+:80
+
+root * /srv
+
+route {
+	# API requests go to backend
+	reverse_proxy /api/* 127.0.0.1:8000
+
+	# Everything else: try static file, fallback to index.html for SPA
+	try_files {path} /index.html
+	file_server
+}

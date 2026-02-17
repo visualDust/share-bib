@@ -1,0 +1,27 @@
+[project]
+name = "paper-collector-backend"
+version = "0.1.0"
+description = "Paper Collector backend API"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.34",
+    "sqlalchemy>=2.0",
+    "pydantic>=2.10",
+    "pydantic-settings>=2.7",
+    "python-jose[cryptography]>=3.3",
+    "passlib>=1.7",
+    "bcrypt>=4.0,<4.1",
+    "python-multipart>=0.0.20",
+    "pyyaml>=6.0",
+    "bibtexparser>=1.4,<2",
+    "aiofiles>=24",
+    "httpx>=0.28",
+    "watchfiles>=1.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "httpx>=0.28",
+]

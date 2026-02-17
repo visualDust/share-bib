@@ -1,0 +1,12 @@
+services:
+  share-bib:
+    image: ghcr.io/visualdust/share-bib:latest
+    # build: .  # uncomment to build locally
+    ports:
+      - "${PORT:-80}:80"
+    volumes:
+      - ./data:/data
+    environment:
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-}
+      - AUTH_TYPE=${AUTH_TYPE:-simple}
+    restart: unless-stopped

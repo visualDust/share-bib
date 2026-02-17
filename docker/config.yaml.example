@@ -1,0 +1,32 @@
+# PACO - Configuration File (optional)
+#
+# This file is optional. All settings can be configured via environment variables.
+# If this file exists at data/config.yaml, it will be loaded, but env vars take priority.
+#
+# On first run, the setup flow will create the admin account and auto-generate
+# a JWT secret key if one is not provided.
+
+# admin_username is set automatically by the setup flow
+# admin_username: ""
+
+auth:
+  type: simple          # "simple" or "oauth"
+
+  # JWT settings (secret_key auto-generated if empty)
+  jwt:
+    # secret_key: ""
+    algorithm: "HS256"
+    expire_days: 7
+
+  # OAuth settings (only needed if auth.type is "oauth")
+  # oauth:
+  #   provider: "github"
+  #   client_id: ""
+  #   client_secret: ""
+  #   authorization_endpoint: "https://github.com/login/oauth/authorize"
+  #   token_endpoint: "https://github.com/login/oauth/access_token"
+  #   userinfo_endpoint: "https://api.github.com/user"
+  #   redirect_uri: "http://localhost/api/auth/oauth/callback"
+  #   scopes: ["read:user", "user:email"]
+
+data_dir: "../data"
