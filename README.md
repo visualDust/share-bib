@@ -28,6 +28,11 @@ Your labmate opens the link you shared → exports the `.bib` → imports it int
 - i18n support (English, 中文)
 - Desktop and mobile page layout
 
+**Tested authentication methods:**
+
+- Simple auth (username/password)
+- OAuth with [Authentik](https://goauthentik.io/)
+
 ## Deploy with Docker
 
 ```yaml

@@ -21,6 +21,7 @@ class User(Base):
     password_hash: Mapped[str | None] = mapped_column(String)
     oauth_provider: Mapped[str | None] = mapped_column(String)
     oauth_sub: Mapped[str | None] = mapped_column(String)
+    is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(timezone.utc)

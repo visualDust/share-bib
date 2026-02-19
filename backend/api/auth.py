@@ -42,7 +42,10 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
 @router.get("/me", response_model=UserOut)
 def get_me(current_user: User = Depends(get_current_user)):
     out = UserOut.model_validate(current_user)
-    out.is_admin = current_user.username == config.admin_username
+    # Check both database field and config for backward compatibility
+    out.is_admin = (
+        current_user.is_admin or current_user.username == config.admin_username
+    )
     return out
 
 
@@ -88,6 +91,10 @@ def oauth_callback(code: str, state: str, db: Session = Depends(get_db)):
     if not oauth_sub:
         raise HTTPException(400, "OAuth provider did not return a user identifier")
 
+    # Check if user is in admin group
+    groups = userinfo.get("groups", [])
+    is_admin = oauth.admin_group in groups if isinstance(groups, list) else False
+
     user = (
         db.query(User)
         .filter(
@@ -98,9 +105,55 @@ def oauth_callback(code: str, state: str, db: Session = Depends(get_db)):
     )
 
     if user is None:
-        raise HTTPException(
-            403, "No account linked to this OAuth identity. Contact admin."
+        # Auto-create user on first OAuth login
+        username = (
+            userinfo.get("preferred_username") or userinfo.get("email") or oauth_sub
         )
+        email = userinfo.get("email")
+        display_name = userinfo.get("name") or username
+
+        # Check if username already exists, if so try to link by email
+        existing_user = db.query(User).filter(User.username == username).first()
+        if (
+            existing_user
+            and existing_user.email == email
+            and not existing_user.oauth_provider
+        ):
+            # Link existing user to OAuth
+            existing_user.oauth_provider = oauth.provider
+            existing_user.oauth_sub = oauth_sub
+            existing_user.is_admin = is_admin
+            if not existing_user.display_name:
+                existing_user.display_name = display_name
+            db.commit()
+            db.refresh(existing_user)
+            user = existing_user
+        else:
+            # Create new user with unique username if needed
+            base_username = username
+            counter = 1
+            while db.query(User).filter(User.username == username).first():
+                username = f"{base_username}_{counter}"
+                counter += 1
+
+            user = User(
+                username=username,
+                email=email,
+                display_name=display_name,
+                oauth_provider=oauth.provider,
+                oauth_sub=oauth_sub,
+                is_admin=is_admin,
+                is_active=True,
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+    else:
+        # Update existing user's admin status from OAuth groups
+        if user.is_admin != is_admin:
+            user.is_admin = is_admin
+            db.commit()
+            db.refresh(user)
 
     if not user.is_active:
         raise HTTPException(403, "Account is disabled")

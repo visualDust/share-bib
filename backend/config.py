@@ -25,6 +25,7 @@ class OAuthConfig(BaseModel):
     userinfo_endpoint: str = ""
     redirect_uri: str = ""
     scopes: list[str] = ["openid", "profile", "email"]
+    admin_group: str = "admins"
 
 
 class AuthConfig(BaseModel):
