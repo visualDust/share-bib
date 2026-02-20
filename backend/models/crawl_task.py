@@ -18,17 +18,17 @@ class CrawlTask(Base):
     )
     name: Mapped[str] = mapped_column(String, nullable=False)
 
-    # 数据源配置
+    # Data source config
     source_type: Mapped[str] = mapped_column(String, nullable=False)
     source_config: Mapped[dict] = mapped_column(JSON, nullable=False)
 
-    # 调度配置
+    # Schedule config
     schedule_type: Mapped[str] = mapped_column(
         String, nullable=False
     )  # daily/weekly/monthly
     time_range: Mapped[str] = mapped_column(String, default="1d")  # 1d/7d/30d
 
-    # Collection 关联
+    # Collection association
     target_mode: Mapped[str] = mapped_column(
         String, nullable=False
     )  # append/create_new
@@ -37,10 +37,10 @@ class CrawlTask(Base):
     )
     new_collection_prefix: Mapped[str | None] = mapped_column(String)
 
-    # 去重策略
+    # Deduplication strategy
     duplicate_strategy: Mapped[str] = mapped_column(String, default="skip")
 
-    # 状态
+    # Status
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     last_run_at: Mapped[datetime | None] = mapped_column(DateTime)
     last_run_status: Mapped[str | None] = mapped_column(String)

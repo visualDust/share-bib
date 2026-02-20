@@ -86,7 +86,12 @@ class ArxivRSSSource(CrawlSource):
             rate_limit=3.0,
         )
 
-    async def fetch(self, config: dict, since: datetime | None) -> list[FetchedPaper]:
+    async def fetch(
+        self,
+        config: dict,
+        since: datetime | None,
+        user_settings: dict | None = None,
+    ) -> list[FetchedPaper]:
         config = self.validate_config(config)
         results = []
         seen_ids: set[str] = set()

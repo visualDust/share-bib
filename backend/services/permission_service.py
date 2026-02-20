@@ -5,23 +5,43 @@ from models import Collection, CollectionPermission
 
 def check_collection_permission(
     db: Session,
-    user_id: str,
+    user_id: str | None,
     collection_id: str,
     required_permission: str,
 ) -> bool:
+    """
+    Check if a user has permission to access a collection.
+
+    Args:
+        user_id: User ID, or None for unauthenticated users
+        collection_id: Collection ID
+        required_permission: "view" or "edit"
+
+    Returns:
+        True if the user has the required permission
+    """
     collection = db.query(Collection).filter(Collection.id == collection_id).first()
     if not collection:
         return False
 
     # Creator has all permissions
-    if collection.created_by == user_id:
+    if user_id and collection.created_by == user_id:
         return True
 
-    # Public collections are viewable by all
+    # Unauthenticated users can only view public collections
+    if user_id is None:
+        if required_permission == "view":
+            return collection.visibility in ("public", "public_editable")
+        return False
+
+    # Authenticated users: check default permissions based on visibility
     if collection.visibility == "public" and required_permission == "view":
         return True
+    if collection.visibility == "public_editable":
+        # Authenticated users can view and edit public_editable collections
+        return True
 
-    # Check explicit permissions
+    # Check explicit permissions (for private/shared collections, or to override defaults)
     perm = (
         db.query(CollectionPermission)
         .filter(

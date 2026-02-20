@@ -41,6 +41,7 @@ class AppConfig(BaseModel):
     auth: AuthConfig = AuthConfig()
     admin_username: str = ""
     data_dir: str = "../data"
+    branding: str = "ShareBib"
 
 
 def _get_config_path() -> Path:

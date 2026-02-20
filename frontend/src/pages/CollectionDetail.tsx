@@ -67,6 +67,7 @@ interface CollectionData {
     display_name: string | null;
   };
   visibility: string;
+  allow_export: boolean;
   task_type: string;
   task_source_display: string | null;
   tags: string[] | null;
@@ -75,6 +76,7 @@ interface CollectionData {
   stats: { total: number; accessible: number; no_access: number };
   groups: Group[];
   permissions: any[];
+  current_user_permission: string | null;
 }
 
 export default function CollectionDetail() {
@@ -93,6 +95,14 @@ export default function CollectionDetail() {
   const [deletingPaper, setDeletingPaper] = useState<PaperItem | null>(null);
   const [mobile, setMobile] = useState(isMobile());
   const { t } = useTranslation();
+
+  const isLoggedIn = !!localStorage.getItem("token");
+  const canEdit = data?.current_user_permission === "edit";
+  const isCreator =
+    data &&
+    isLoggedIn &&
+    data.created_by.user_id === localStorage.getItem("user_id");
+  const canExport = data && (isCreator || data.allow_export);
 
   const fetchData = useCallback(() => {
     if (!id) return;
@@ -235,11 +245,11 @@ export default function CollectionDetail() {
   return (
     <div>
       <div
+        className="collection-detail-actions"
         style={{
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          marginBottom: 16,
           flexWrap: "wrap",
           gap: 8,
         }}
@@ -247,46 +257,70 @@ export default function CollectionDetail() {
         <Button
           icon={<IconArrowLeft />}
           theme="borderless"
-          onClick={() => navigate("/")}
+          onClick={() => (isLoggedIn ? navigate("/") : navigate("/login"))}
           style={mobile ? { minWidth: "auto", padding: "8px 12px" } : undefined}
         >
-          {mobile ? null : t("collection.back")}
+          {mobile
+            ? null
+            : isLoggedIn
+              ? t("collection.back")
+              : t("collection.login")}
         </Button>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <Button
-            icon={<IconDownload />}
-            theme="solid"
-            type="tertiary"
-            onClick={handleExportBibtex}
-            style={
-              mobile ? { minWidth: "auto", padding: "8px 12px" } : undefined
-            }
-          >
-            {mobile ? null : t("collection.exportBibtex")}
-          </Button>
-          <Button
-            icon={<IconPlus />}
-            theme="solid"
-            onClick={() => setShowAddPapers(true)}
-            style={
-              mobile ? { minWidth: "auto", padding: "8px 12px" } : undefined
-            }
-          >
-            {mobile ? null : t("collection.addPapers")}
-          </Button>
-          <Button
-            icon={<IconSetting />}
-            theme="solid"
-            type="secondary"
-            onClick={() => setShowCollectionEdit(true)}
-            style={
-              mobile ? { minWidth: "auto", padding: "8px 12px" } : undefined
-            }
-          >
-            {mobile ? null : t("collection.editCollection")}
-          </Button>
+          {canExport && (
+            <Button
+              icon={<IconDownload />}
+              theme="solid"
+              type="tertiary"
+              onClick={handleExportBibtex}
+              style={
+                mobile ? { minWidth: "auto", padding: "8px 12px" } : undefined
+              }
+            >
+              {mobile ? null : t("collection.exportBibtex")}
+            </Button>
+          )}
+          {canEdit && (
+            <>
+              <Button
+                icon={<IconPlus />}
+                theme="solid"
+                onClick={() => setShowAddPapers(true)}
+                style={
+                  mobile ? { minWidth: "auto", padding: "8px 12px" } : undefined
+                }
+              >
+                {mobile ? null : t("collection.addPapers")}
+              </Button>
+              <Button
+                icon={<IconSetting />}
+                theme="solid"
+                type="secondary"
+                onClick={() => setShowCollectionEdit(true)}
+                style={
+                  mobile ? { minWidth: "auto", padding: "8px 12px" } : undefined
+                }
+              >
+                {mobile ? null : t("collection.editCollection")}
+              </Button>
+            </>
+          )}
         </div>
       </div>
+      {!isLoggedIn && (
+        <div
+          style={{
+            padding: "12px 16px",
+            marginBottom: 16,
+            background: "var(--semi-color-info-light-default)",
+            borderRadius: 8,
+            color: "var(--semi-color-info)",
+            fontSize: 14,
+          }}
+        >
+          {t("collection.loginHint")}
+        </div>
+      )}
       <div className="collection-detail-header">
         <Title heading={3}>{data.title}</Title>
         {data.description && (
@@ -580,23 +614,27 @@ export default function CollectionDetail() {
                     </Button>
                   )}
                   <span style={{ flex: 1 }} />
-                  <Button
-                    size="small"
-                    theme="borderless"
-                    icon={<IconEdit />}
-                    onClick={() => setEditingPaper(paper)}
-                  >
-                    {t("collection.edit")}
-                  </Button>
-                  <Button
-                    size="small"
-                    theme="borderless"
-                    type="danger"
-                    icon={<IconDelete />}
-                    onClick={() => setDeletingPaper(paper)}
-                  >
-                    {t("collection.remove")}
-                  </Button>
+                  {canEdit && (
+                    <>
+                      <Button
+                        size="small"
+                        theme="borderless"
+                        icon={<IconEdit />}
+                        onClick={() => setEditingPaper(paper)}
+                      >
+                        {t("collection.edit")}
+                      </Button>
+                      <Button
+                        size="small"
+                        theme="borderless"
+                        type="danger"
+                        icon={<IconDelete />}
+                        onClick={() => setDeletingPaper(paper)}
+                      >
+                        {t("collection.remove")}
+                      </Button>
+                    </>
+                  )}
                 </div>
                 {paper.tags && paper.tags.length > 0 && (
                   <div className="paper-tags">

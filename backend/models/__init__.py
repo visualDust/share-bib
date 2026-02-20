@@ -7,6 +7,7 @@ from .import_task import ImportTask
 from .user_paper_meta import UserPaperMeta
 from .crawl_task import CrawlTask
 from .crawl_task_run import CrawlTaskRun
+from .user_setting import UserSetting
 
 __all__ = [
     "User",
@@ -18,4 +19,5 @@ __all__ = [
     "UserPaperMeta",
     "CrawlTask",
     "CrawlTaskRun",
+    "UserSetting",
 ]

@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from models import Paper, Collection, CollectionPaper
 from models.crawl_task import CrawlTask
+from models.user_setting import UserSetting
 from crawl.sources import get_source
 from services.deduplication import find_duplicate_paper
 
@@ -14,11 +15,11 @@ logger = logging.getLogger(__name__)
 
 
 class CrawlExecutor:
-    """编排爬取执行：源 → 去重 → 写入 collection"""
+    """Orchestrate crawl execution: source -> dedup -> write to collection"""
 
     async def execute(self, task: CrawlTask, db: Session) -> dict:
         """
-        执行一个爬取任务，返回结果摘要。
+        Execute a crawl task and return a result summary.
         """
         source = get_source(task.source_type)
         result = {
@@ -30,7 +31,7 @@ class CrawlExecutor:
         }
 
         try:
-            # 1. 获取或创建目标 collection
+            # 1. Resolve or create target collection
             collection = self._resolve_collection(task, db)
             if collection is None:
                 return {
@@ -40,10 +41,15 @@ class CrawlExecutor:
                 }
             result["collection_id"] = collection.id
 
-            # 2. 执行爬取
-            papers = await source.fetch(task.source_config, task.last_run_at)
+            # 2. Load user settings (e.g. API key)
+            user_settings = self._load_user_settings(task.user_id, db)
 
-            # 3. 获取当前最大 display_order
+            # 3. Execute crawl
+            papers = await source.fetch(
+                task.source_config, task.last_run_at, user_settings
+            )
+
+            # 4. Get current max display_order
             max_order = (
                 db.query(func.max(CollectionPaper.display_order))
                 .filter(CollectionPaper.collection_id == collection.id)
@@ -51,7 +57,7 @@ class CrawlExecutor:
                 or 0
             )
 
-            # 4. 逐条去重并写入
+            # 5. Deduplicate and write each paper
             for fetched in papers:
                 try:
                     paper_dict = fetched.to_paper_dict()
@@ -75,7 +81,7 @@ class CrawlExecutor:
                         db.flush()
                         result["new_papers"] += 1
 
-                    # Collection 内去重
+                    # Deduplicate within collection
                     cp_exists = (
                         db.query(CollectionPaper)
                         .filter(
@@ -108,8 +114,13 @@ class CrawlExecutor:
 
         return result
 
+    def _load_user_settings(self, user_id: str, db: Session) -> dict:
+        """Load user settings as a {key: value} dict"""
+        rows = db.query(UserSetting).filter(UserSetting.user_id == user_id).all()
+        return {r.key: r.value for r in rows}
+
     def _resolve_collection(self, task: CrawlTask, db: Session) -> Collection | None:
-        """获取或创建目标 collection。"""
+        """Resolve or create the target collection."""
         if task.target_mode == "append":
             collection = (
                 db.query(Collection)
@@ -117,7 +128,7 @@ class CrawlExecutor:
                 .first()
             )
             if not collection:
-                # Collection 已被删除，禁用任务
+                # Collection has been deleted, disable the task
                 task.is_enabled = False
                 task.last_run_status = "failed"
                 task.last_run_result = {
@@ -128,7 +139,7 @@ class CrawlExecutor:
                 return None
             return collection
         else:
-            # create_new 模式：每次创建新 collection
+            # create_new mode: create a new collection each time
             prefix = task.new_collection_prefix or task.name
             date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
             title = f"{prefix} - {date_str}"

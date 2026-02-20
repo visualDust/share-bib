@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import String, Text, DateTime, ForeignKey, JSON
+from sqlalchemy import String, Text, DateTime, ForeignKey, JSON, Boolean
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database import Base
@@ -16,6 +16,7 @@ class Collection(Base):
         String, ForeignKey("users.id"), nullable=False, index=True
     )
     visibility: Mapped[str] = mapped_column(String, default="private", index=True)
+    allow_export: Mapped[bool] = mapped_column(Boolean, default=False)
     task_type: Mapped[str] = mapped_column(String, nullable=False)
     task_source: Mapped[str | None] = mapped_column(String)
     task_source_display: Mapped[str | None] = mapped_column(String)

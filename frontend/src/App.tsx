@@ -17,6 +17,7 @@ interface SystemStatus {
   initialized: boolean;
   auth_type: string;
   oauth_configured: boolean;
+  branding: string;
 }
 
 interface SystemContextValue {
@@ -58,6 +59,7 @@ export default function App() {
           initialized: true,
           auth_type: "simple",
           oauth_configured: false,
+          branding: "",
         }),
       )
       .finally(() => setLoading(false));
@@ -93,6 +95,19 @@ export default function App() {
             !status?.initialized ? <Navigate to="/setup" replace /> : <Login />
           }
         />
+        {/* Public collection view - accessible without login */}
+        <Route
+          path="/collections/:id"
+          element={
+            !status?.initialized ? (
+              <Navigate to="/setup" replace />
+            ) : (
+              <AppLayout>
+                <CollectionDetail />
+              </AppLayout>
+            )
+          }
+        />
         <Route
           path="/*"
           element={
@@ -103,10 +118,6 @@ export default function App() {
                 <AppLayout>
                   <Routes>
                     <Route path="/" element={<Home />} />
-                    <Route
-                      path="/collections/:id"
-                      element={<CollectionDetail />}
-                    />
                     <Route path="/import" element={<Import />} />
                     <Route path="/crawl-tasks" element={<CrawlTasks />} />
                     <Route path="/user/:username" element={<UserProfile />} />

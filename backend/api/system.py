@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from auth.jwt_handler import create_access_token
 from auth.simple import get_password_hash
+from auth.deps import get_admin_user
 from config import config
 from database import get_db
 from models import User
@@ -22,6 +23,7 @@ class SystemStatusResponse(BaseModel):
     initialized: bool
     auth_type: str
     oauth_configured: bool
+    branding: str
 
 
 class SetupRequest(BaseModel):
@@ -36,6 +38,10 @@ class SetupResponse(BaseModel):
     username: str
 
 
+class BrandingUpdate(BaseModel):
+    branding: str
+
+
 @router.get("/status", response_model=SystemStatusResponse)
 def system_status(db: Session = Depends(get_db)):
     has_users = db.query(User).count() > 0
@@ -43,6 +49,7 @@ def system_status(db: Session = Depends(get_db)):
         initialized=has_users,
         auth_type=config.auth.type,
         oauth_configured=bool(config.auth.oauth.client_id),
+        branding=config.branding,
     )
 
 
@@ -198,3 +205,34 @@ def setup_oauth_callback(code: str, state: str, db: Session = Depends(get_db)):
 
     jwt_token = create_access_token({"sub": user.id, "username": user.username})
     return RedirectResponse(f"/?token={jwt_token}")
+
+
+@router.put("/branding")
+def update_branding(
+    body: BrandingUpdate,
+    user: User = Depends(get_admin_user),
+):
+    """Update system branding (admin only)."""
+    _update_config_branding(body.branding)
+    return {"ok": True, "branding": config.branding}
+
+
+def _update_config_branding(branding: str):
+    """Write branding to config.yaml so it persists across restarts."""
+    import os
+
+    config_path = Path(os.environ.get("CONFIG_PATH", "../data/config.yaml"))
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+
+    data: dict = {}
+    if config_path.exists():
+        with open(config_path) as f:
+            data = yaml.safe_load(f) or {}
+
+    data["branding"] = branding
+
+    with open(config_path, "w") as f:
+        yaml.dump(data, f, default_flow_style=False, allow_unicode=True)
+
+    # Update the in-memory config
+    config.branding = branding

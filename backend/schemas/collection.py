@@ -22,6 +22,7 @@ class CollectionUpdate(BaseModel):
     description: str | None = None
     task_source_display: str | None = None
     tags: list[str] | None = None
+    allow_export: bool | None = None
 
 
 class CollectionVisibilityUpdate(BaseModel):
@@ -40,6 +41,7 @@ class CollectionListOut(BaseModel):
     description: str | None = None
     created_by: UserBrief
     visibility: str
+    allow_export: bool = False
     task_type: str
     task_source_display: str | None = None
     tags: list[str] | None = None
@@ -86,6 +88,7 @@ class CollectionOut(BaseModel):
     description: str | None = None
     created_by: UserBrief
     visibility: str
+    allow_export: bool = False
     permissions: list[PermissionOut] = []
     task_type: str
     task_source_display: str | None = None
@@ -94,6 +97,9 @@ class CollectionOut(BaseModel):
     updated_at: datetime
     stats: StatsOut
     groups: list[GroupOut] = []
+    current_user_permission: str | None = (
+        None  # "view", "edit", or None for unauthenticated
+    )
 
 
 class PermissionCreate(BaseModel):

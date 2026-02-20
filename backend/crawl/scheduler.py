@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 def compute_next_run(schedule_type: str, from_time: datetime) -> datetime | None:
-    """计算下次运行时间。once 类型返回 None 表示不再调度。"""
+    """Compute next run time. Returns None for 'once' type (no further scheduling)."""
     if schedule_type == "once":
         return None
     elif schedule_type == "daily":
@@ -24,45 +24,52 @@ def compute_next_run(schedule_type: str, from_time: datetime) -> datetime | None
 
 
 class CrawlScheduler:
-    """轻量级爬取调度器，随 FastAPI 生命周期启停"""
+    """Lightweight crawl scheduler, starts and stops with FastAPI lifecycle"""
 
     def __init__(self):
         self._task: asyncio.Task | None = None
         self._stop_event = asyncio.Event()
         self._executor = CrawlExecutor()
+        self._running_tasks: set[str] = (
+            set()
+        )  # Reentrancy guard: currently executing task IDs
 
     async def start(self):
-        """FastAPI startup 时调用"""
+        """Called on FastAPI startup"""
         self._stop_event.clear()
         self._task = asyncio.create_task(self._run_loop())
         logger.info("CrawlScheduler started")
 
     async def stop(self):
-        """FastAPI shutdown 时调用"""
+        """Called on FastAPI shutdown"""
         self._stop_event.set()
         if self._task:
             await self._task
         logger.info("CrawlScheduler stopped")
 
-    async def run_task_now(self, task_id: str):
-        """立即执行一个任务（不影响调度）"""
+    async def run_task_now(self, task_id: str) -> bool:
+        """Run a task immediately. Returns False if the task is already running."""
+        if task_id in self._running_tasks:
+            logger.warning(f"Task {task_id} is already running, skipping")
+            return False
         db = SessionLocal()
         try:
             task = db.query(CrawlTask).filter(CrawlTask.id == task_id).first()
             if not task:
-                return
+                return False
             await self._execute_task(task, db)
+            return True
         finally:
             db.close()
 
     async def _run_loop(self):
-        """每 60 秒检查一次是否有任务需要执行"""
+        """Check for due tasks every 60 seconds"""
         while not self._stop_event.is_set():
             try:
                 await self._check_and_run()
             except Exception as e:
                 logger.error(f"Scheduler error: {e}")
-            # 等待 60 秒或被停止
+            # Wait 60 seconds or until stopped
             try:
                 await asyncio.wait_for(self._stop_event.wait(), timeout=60)
                 break
@@ -70,7 +77,7 @@ class CrawlScheduler:
                 pass
 
     async def _check_and_run(self):
-        """检查所有到期任务并串行执行"""
+        """Check all due tasks and execute them serially"""
         db = SessionLocal()
         try:
             now = datetime.now(timezone.utc)
@@ -89,7 +96,21 @@ class CrawlScheduler:
             db.close()
 
     async def _execute_task(self, task: CrawlTask, db):
-        """执行单个爬取任务"""
+        """Execute a single crawl task"""
+        if task.id in self._running_tasks:
+            logger.warning(f"Task {task.name} ({task.id}) already running, skipping")
+            return
+        self._running_tasks.add(task.id)
+        try:
+            await self._execute_task_inner(task, db)
+        finally:
+            self._running_tasks.discard(task.id)
+
+    def is_task_running(self, task_id: str) -> bool:
+        return task_id in self._running_tasks
+
+    async def _execute_task_inner(self, task: CrawlTask, db):
+        """Execute a single crawl task (internal implementation)"""
         logger.info(f"Executing crawl task: {task.name} ({task.id})")
         now = datetime.now(timezone.utc)
         run = CrawlTaskRun(task_id=task.id, status="running", started_at=now)

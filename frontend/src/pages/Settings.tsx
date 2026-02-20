@@ -11,9 +11,17 @@ import {
   Toast,
   Input,
   Spin,
+  RadioGroup,
+  Radio,
 } from "@douyinfe/semi-ui-19";
-import { IconArrowLeft, IconTick, IconClose } from "@douyinfe/semi-icons";
+import {
+  IconArrowLeft,
+  IconTick,
+  IconClose,
+  IconDelete,
+} from "@douyinfe/semi-icons";
 import client from "../api/client";
+import { useSystemStatus } from "../App";
 import "../styles/glass.css";
 
 const { Title, Text } = Typography;
@@ -22,17 +30,29 @@ interface UserInfo {
   username: string;
   display_name: string | null;
   email: string | null;
+  is_admin: boolean;
+}
+
+interface ApiKeySetting {
+  key: string;
+  value: string;
+  is_set: boolean;
 }
 
 export default function Settings() {
   const navigate = useNavigate();
   const { t, i18n } = useTranslation();
+  const { status, setStatus } = useSystemStatus();
   const [loading, setLoading] = useState(true);
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
 
   // Language & Theme
   const [language, setLanguage] = useState<string>("auto");
   const [theme, setTheme] = useState<string>("auto");
+
+  // Branding (admin only)
+  const [branding, setBranding] = useState<string>("");
+  const [brandingSubmitting, setBrandingSubmitting] = useState(false);
 
   // Password modal
   const [pwdVisible, setPwdVisible] = useState(false);
@@ -54,6 +74,18 @@ export default function Settings() {
     {},
   );
 
+  // API Keys
+  const [apiKeys, setApiKeys] = useState<ApiKeySetting[]>([]);
+  const [editingKey, setEditingKey] = useState<string | null>(null);
+  const [editingValue, setEditingValue] = useState("");
+
+  const loadApiKeys = () => {
+    client
+      .get("/user-settings")
+      .then((res) => setApiKeys(res.data))
+      .catch(() => {});
+  };
+
   useEffect(() => {
     // Load user info
     client
@@ -68,6 +100,13 @@ export default function Settings() {
       })
       .catch(() => navigate("/login"))
       .finally(() => setLoading(false));
+
+    loadApiKeys();
+
+    // Load branding
+    if (status?.branding) {
+      setBranding(status.branding);
+    }
 
     // Load language preference
     const savedLang = localStorage.getItem("i18nextLng");
@@ -106,6 +145,25 @@ export default function Settings() {
     } else {
       localStorage.setItem("theme", value);
       document.body.setAttribute("theme-mode", value);
+    }
+  };
+
+  const handleBrandingUpdate = async () => {
+    if (!branding.trim()) {
+      Toast.warning(t("settings.brandingRequired"));
+      return;
+    }
+    setBrandingSubmitting(true);
+    try {
+      await client.put("/system/branding", { branding: branding.trim() });
+      Toast.success(t("settings.saveSuccess"));
+      if (setStatus && status) {
+        setStatus({ ...status, branding: branding.trim() });
+      }
+    } catch (err: any) {
+      Toast.error(err.response?.data?.detail || t("settings.saveFailed"));
+    } finally {
+      setBrandingSubmitting(false);
     }
   };
 
@@ -191,6 +249,28 @@ export default function Settings() {
     }
   };
 
+  const handleApiKeySave = async (key: string) => {
+    try {
+      await client.put("/user-settings", { key, value: editingValue });
+      Toast.success(t("settings.apiKeySaveSuccess"));
+      setEditingKey(null);
+      setEditingValue("");
+      loadApiKeys();
+    } catch {
+      Toast.error(t("settings.apiKeyFailed"));
+    }
+  };
+
+  const handleApiKeyDelete = async (key: string) => {
+    try {
+      await client.delete(`/user-settings/${key}`);
+      Toast.success(t("settings.apiKeyDeleteSuccess"));
+      loadApiKeys();
+    } catch {
+      Toast.error(t("settings.apiKeyFailed"));
+    }
+  };
+
   const handleProfileSubmit = async () => {
     if (Object.keys(profileErrors).length > 0) {
       Toast.warning(t("admin.fixConflicts"));
@@ -212,6 +292,7 @@ export default function Settings() {
         username: profileForm.username,
         display_name: profileForm.display_name || null,
         email: profileForm.email || null,
+        is_admin: userInfo?.is_admin || false,
       });
       setProfileVisible(false);
     } catch (err: any) {
@@ -270,21 +351,17 @@ export default function Settings() {
           </div>
           <div>
             <label className="form-label">{t("settings.theme")}</label>
-            <Select
+            <RadioGroup
+              type="button"
+              buttonSize="middle"
               value={theme}
-              onChange={(v) => handleThemeChange(v as string)}
+              onChange={(e) => handleThemeChange(e.target.value)}
               style={{ width: "100%" }}
             >
-              <Select.Option value="auto">
-                {t("settings.themeAuto")}
-              </Select.Option>
-              <Select.Option value="light">
-                {t("settings.themeLight")}
-              </Select.Option>
-              <Select.Option value="dark">
-                {t("settings.themeDark")}
-              </Select.Option>
-            </Select>
+              <Radio value="auto">{t("settings.themeAuto")}</Radio>
+              <Radio value="light">{t("settings.themeLight")}</Radio>
+              <Radio value="dark">{t("settings.themeDark")}</Radio>
+            </RadioGroup>
           </div>
         </Card>
 
@@ -343,6 +420,136 @@ export default function Settings() {
                 {t("settings.changePassword")}
               </Button>
             </div>
+          </div>
+        </Card>
+
+        {userInfo?.is_admin && (
+          <Card className="glass-card">
+            <Title heading={5} style={{ marginBottom: 4 }}>
+              {t("settings.branding")}
+            </Title>
+            <Text
+              type="tertiary"
+              style={{ fontSize: 13, display: "block", marginBottom: 16 }}
+            >
+              {t("settings.brandingDesc")}
+            </Text>
+            <div style={{ display: "flex", gap: 8 }}>
+              <Input
+                style={{ flex: 1 }}
+                value={branding}
+                onChange={(v) => setBranding(v)}
+                placeholder="ShareBib"
+              />
+              <Button
+                theme="solid"
+                onClick={handleBrandingUpdate}
+                loading={brandingSubmitting}
+                disabled={!branding.trim() || branding === status?.branding}
+              >
+                {t("settings.save")}
+              </Button>
+            </div>
+          </Card>
+        )}
+
+        <Card className="glass-card">
+          <Title heading={5} style={{ marginBottom: 4 }}>
+            {t("settings.apiKeys")}
+          </Title>
+          <Text
+            type="tertiary"
+            style={{ fontSize: 13, display: "block", marginBottom: 16 }}
+          >
+            {t("settings.apiKeysDesc")}
+          </Text>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {apiKeys.map((item) => (
+              <div key={item.key}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: 4,
+                  }}
+                >
+                  <Text strong>
+                    {t(`settings.apiKeyLabel.${item.key}`, item.key)}
+                  </Text>
+                  <Text
+                    type={item.is_set ? "success" : "tertiary"}
+                    style={{ fontSize: 12 }}
+                  >
+                    {item.is_set
+                      ? t("settings.apiKeySet")
+                      : t("settings.apiKeyNotSet")}
+                  </Text>
+                </div>
+                <Text
+                  type="tertiary"
+                  style={{ fontSize: 12, display: "block", marginBottom: 6 }}
+                >
+                  {t(`settings.apiKeyHint.${item.key}`, "")}
+                </Text>
+                {editingKey === item.key ? (
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <Input
+                      style={{ flex: 1 }}
+                      value={editingValue}
+                      onChange={(v) => setEditingValue(v)}
+                      placeholder={t("settings.apiKeyPlaceholder")}
+                      mode="password"
+                    />
+                    <Button
+                      theme="solid"
+                      size="small"
+                      onClick={() => handleApiKeySave(item.key)}
+                      disabled={!editingValue}
+                    >
+                      {t("settings.save")}
+                    </Button>
+                    <Button
+                      size="small"
+                      onClick={() => {
+                        setEditingKey(null);
+                        setEditingValue("");
+                      }}
+                    >
+                      {t("settings.cancel")}
+                    </Button>
+                  </div>
+                ) : (
+                  <div
+                    style={{ display: "flex", gap: 8, alignItems: "center" }}
+                  >
+                    <Input
+                      style={{ flex: 1 }}
+                      value={item.value}
+                      disabled
+                      placeholder={t("settings.apiKeyNotSet")}
+                    />
+                    <Button
+                      size="small"
+                      onClick={() => {
+                        setEditingKey(item.key);
+                        setEditingValue("");
+                      }}
+                    >
+                      {item.is_set ? t("settings.edit") : t("settings.set")}
+                    </Button>
+                    {item.is_set && (
+                      <Button
+                        size="small"
+                        type="danger"
+                        icon={<IconDelete />}
+                        onClick={() => handleApiKeyDelete(item.key)}
+                      />
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         </Card>
       </div>

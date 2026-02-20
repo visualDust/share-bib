@@ -12,8 +12,9 @@ import {
   Tag,
   Spin,
   TagInput,
+  Checkbox,
 } from "@douyinfe/semi-ui-19";
-import { IconDelete, IconSearch } from "@douyinfe/semi-icons";
+import { IconDelete, IconSearch, IconLink } from "@douyinfe/semi-icons";
 import client from "../api/client";
 import CollectionDeduplicationModal from "./CollectionDeduplicationModal";
 import "../styles/glass.css";
@@ -28,6 +29,7 @@ interface CollectionInfo {
   title: string;
   description: string | null;
   visibility: string;
+  allow_export: boolean;
   task_source_display: string | null;
   tags: string[] | null;
 }
@@ -64,6 +66,7 @@ export default function CollectionEditSheet({
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [visibility, setVisibility] = useState("private");
+  const [allowExport, setAllowExport] = useState(false);
   const [sourceDisplay, setSourceDisplay] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [permissions, setPermissions] = useState<PermissionItem[]>([]);
@@ -93,6 +96,7 @@ export default function CollectionEditSheet({
       setTitle(collection.title || "");
       setDescription(collection.description || "");
       setVisibility(collection.visibility || "private");
+      setAllowExport(collection.allow_export || false);
       setSourceDisplay(collection.task_source_display || "");
       setTags(collection.tags || []);
     }
@@ -170,6 +174,7 @@ export default function CollectionEditSheet({
         description: description || null,
         task_source_display: sourceDisplay || null,
         tags: tags.length > 0 ? tags : null,
+        allow_export: allowExport,
       });
       if (visibility !== collection.visibility) {
         await client.put(`/collections/${collection.id}/visibility`, {
@@ -257,9 +262,58 @@ export default function CollectionEditSheet({
             <Select.Option value="public">
               {t("collectionEdit.public")}
             </Select.Option>
+            <Select.Option value="public_editable">
+              {t("collectionEdit.publicEditable")}
+            </Select.Option>
           </Select>
         </div>
-        {visibility === "shared" && (
+        {(visibility === "public" || visibility === "public_editable") && (
+          <div>
+            <label className="form-label">
+              {t("collectionEdit.shareLink")}
+            </label>
+            <div style={{ display: "flex", gap: 8 }}>
+              <Input
+                value={`${window.location.origin}/collections/${collection?.id}`}
+                readOnly
+                style={{ flex: 1 }}
+              />
+              <Button
+                icon={<IconLink />}
+                onClick={() => {
+                  navigator.clipboard.writeText(
+                    `${window.location.origin}/collections/${collection?.id}`,
+                  );
+                  Toast.success(t("collectionEdit.linkCopied"));
+                }}
+              >
+                {t("collectionEdit.copyLink")}
+              </Button>
+            </div>
+          </div>
+        )}
+        {(visibility === "public" || visibility === "public_editable") && (
+          <div>
+            <Checkbox
+              checked={allowExport}
+              onChange={(e) => setAllowExport(e.target.checked ?? false)}
+            >
+              {t("collectionEdit.allowExport")}
+            </Checkbox>
+            <div
+              style={{
+                marginTop: 4,
+                fontSize: 12,
+                color: "var(--semi-color-text-2)",
+              }}
+            >
+              {t("collectionEdit.allowExportHint")}
+            </div>
+          </div>
+        )}
+        {(visibility === "shared" ||
+          visibility === "public" ||
+          visibility === "public_editable") && (
           <div>
             <label className="form-label">
               {t("collectionEdit.sharedUsers")}

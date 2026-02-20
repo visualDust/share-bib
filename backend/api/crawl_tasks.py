@@ -71,7 +71,7 @@ def _task_to_dict(task: CrawlTask) -> dict:
 
 @router.get("/sources", tags=["crawl-sources"])
 def get_crawl_sources():
-    """列出可用数据源及其配置 schema"""
+    """List available data sources and their config schemas"""
     return [s.to_dict() for s in list_sources()]
 
 
@@ -292,6 +292,10 @@ async def run_crawl_task_now(
     )
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
+
+    # Reentrancy guard: reject duplicate trigger while task is running
+    if scheduler.is_task_running(task_id):
+        raise HTTPException(status_code=409, detail="Task is already running")
 
     # Run in background to not block the request
     asyncio.create_task(scheduler.run_task_now(task_id))

@@ -9,6 +9,9 @@
 # admin_username is set automatically by the setup flow
 # admin_username: ""
 
+# Branding - customize the application name displayed in the header
+branding: "ShareBib"
+
 auth:
   type: simple          # "simple" or "oauth"
 

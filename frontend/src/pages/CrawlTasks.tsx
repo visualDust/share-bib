@@ -152,8 +152,12 @@ export default function CrawlTasks() {
     try {
       await client.post(`/crawl-tasks/${task.id}/run-now`);
       Toast.success(t("crawl.runStarted"));
-    } catch {
-      Toast.error(t("crawl.runFailed"));
+    } catch (err: any) {
+      if (err.response?.status === 409) {
+        Toast.warning(t("crawl.alreadyRunning"));
+      } else {
+        Toast.error(t("crawl.runFailed"));
+      }
     }
   };
 
@@ -187,9 +191,12 @@ export default function CrawlTasks() {
     if (!r) return "";
     if (r.error) return String(r.error);
     const parts: string[] = [];
-    if (r.new_papers) parts.push(t("crawl.newPapers", { count: r.new_papers }));
-    if (r.skipped) parts.push(t("crawl.skippedPapers", { count: r.skipped }));
-    if (r.updated) parts.push(t("crawl.updatedPapers", { count: r.updated }));
+    if (r.new_papers)
+      parts.push(t("crawl.newPapers", { count: Number(r.new_papers) }));
+    if (r.skipped)
+      parts.push(t("crawl.skippedPapers", { count: Number(r.skipped) }));
+    if (r.updated)
+      parts.push(t("crawl.updatedPapers", { count: Number(r.updated) }));
     return parts.join(", ");
   };
 

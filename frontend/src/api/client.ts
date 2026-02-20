@@ -19,8 +19,19 @@ client.interceptors.response.use(
   (err) => {
     if (err.response?.status === 401) {
       // Don't redirect for system/setup endpoints (unauthenticated by design)
+      // or for public collection views, or for /auth/me (used to check login status)
       const url = err.config?.url || "";
-      if (!url.includes("/system/")) {
+      const isSystemEndpoint = url.includes("/system/");
+      const isAuthMe = url === "/auth/me";
+      const isCollectionView = url.match(/^\/collections\/[^/]+$/);
+      const isCollectionExport = url.match(/^\/collections\/[^/]+\/export\//);
+
+      if (
+        !isSystemEndpoint &&
+        !isAuthMe &&
+        !isCollectionView &&
+        !isCollectionExport
+      ) {
         localStorage.removeItem("token");
         window.location.href = "/login";
       }

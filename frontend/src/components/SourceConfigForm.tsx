@@ -6,11 +6,8 @@ import {
   InputNumber,
   TagInput,
   Collapsible,
-  Typography,
 } from "@douyinfe/semi-ui-19";
 import { IconHelpCircle } from "@douyinfe/semi-icons";
-
-const { Text } = Typography;
 
 interface ConfigField {
   key: string;

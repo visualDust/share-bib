@@ -38,6 +38,7 @@ def init_db():
         ImportTask,
         CrawlTask,
         CrawlTaskRun,
+        UserSetting,
     )
 
     Base.metadata.create_all(bind=engine)

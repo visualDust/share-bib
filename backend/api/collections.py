@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
-from auth.deps import get_current_user
+from auth.deps import get_current_user, get_current_user_optional
 from database import get_db
 from models import User, Collection, Paper, CollectionPaper, CollectionPermission
 from schemas import (
@@ -72,7 +72,9 @@ def list_collections(
         .subquery()
     )
     shared = db.query(Collection).filter(Collection.id.in_(shared_ids))
-    public = db.query(Collection).filter(Collection.visibility == "public")
+    public = db.query(Collection).filter(
+        Collection.visibility.in_(["public", "public_editable"])
+    )
     collections = (
         own.union(shared).union(public).order_by(Collection.created_at.desc()).all()
     )
@@ -89,6 +91,7 @@ def list_collections(
                 if creator
                 else UserBrief(user_id=c.created_by, username="unknown"),
                 visibility=c.visibility,
+                allow_export=c.allow_export,
                 task_type=c.task_type,
                 task_source_display=c.task_source_display,
                 tags=c.tags,
@@ -130,6 +133,7 @@ def create_collection(
         description=c.description,
         created_by=_user_brief(current_user),
         visibility=c.visibility,
+        allow_export=c.allow_export,
         task_type=c.task_type,
         task_source_display=c.task_source_display,
         tags=c.tags,
@@ -143,9 +147,10 @@ def create_collection(
 def get_collection(
     collection_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User | None = Depends(get_current_user_optional),
 ):
-    if not check_collection_permission(db, current_user.id, collection_id, "view"):
+    user_id = current_user.id if current_user else None
+    if not check_collection_permission(db, user_id, collection_id, "view"):
         raise HTTPException(status_code=403, detail="No permission")
     c = db.query(Collection).filter(Collection.id == collection_id).first()
     if not c:
@@ -215,6 +220,28 @@ def get_collection(
         ]
         groups_out.append(GroupOut(name=gname, tag=gdata["tag"], sections=sections))
 
+    # Determine current user's permission
+    current_user_permission = None
+    if user_id:
+        if c.created_by == user_id:
+            current_user_permission = "edit"
+        elif c.visibility == "public_editable":
+            current_user_permission = "edit"
+        elif c.visibility in ("public", "public_editable"):
+            current_user_permission = "view"
+        else:
+            # Check explicit permissions
+            perm = (
+                db.query(CollectionPermission)
+                .filter(
+                    CollectionPermission.collection_id == collection_id,
+                    CollectionPermission.user_id == user_id,
+                )
+                .first()
+            )
+            if perm:
+                current_user_permission = perm.permission
+
     return CollectionOut(
         id=c.id,
         title=c.title,
@@ -223,6 +250,7 @@ def get_collection(
         if creator
         else UserBrief(user_id=c.created_by, username="unknown"),
         visibility=c.visibility,
+        allow_export=c.allow_export,
         permissions=perm_out,
         task_type=c.task_type,
         task_source_display=c.task_source_display,
@@ -231,6 +259,7 @@ def get_collection(
         updated_at=c.updated_at,
         stats=_collection_stats(db, c.id),
         groups=groups_out,
+        current_user_permission=current_user_permission,
     )
 
 
@@ -260,6 +289,7 @@ def update_collection(
         if creator
         else UserBrief(user_id=c.created_by, username="unknown"),
         visibility=c.visibility,
+        allow_export=c.allow_export,
         task_type=c.task_type,
         task_source_display=c.task_source_display,
         tags=c.tags,
@@ -544,15 +574,23 @@ def remove_permission(
 def export_collection_to_bibtex(
     collection_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User | None = Depends(get_current_user_optional),
 ):
     """Export all papers in a collection to BibTeX format."""
-    if not check_collection_permission(db, current_user.id, collection_id, "view"):
+    user_id = current_user.id if current_user else None
+    if not check_collection_permission(db, user_id, collection_id, "view"):
         raise HTTPException(status_code=403, detail="No permission")
 
     c = db.query(Collection).filter(Collection.id == collection_id).first()
     if not c:
         raise HTTPException(status_code=404, detail="Collection not found")
+
+    # Check export permission: creator can always export, others need allow_export=True
+    is_creator = user_id and c.created_by == user_id
+    if not is_creator and not c.allow_export:
+        raise HTTPException(
+            status_code=403, detail="Export is not allowed for this collection"
+        )
 
     # Get all papers in the collection
     cps = (
