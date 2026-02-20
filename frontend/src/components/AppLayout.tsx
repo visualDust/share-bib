@@ -112,8 +112,22 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             onClick={() => navigate("/")}
             style={{ cursor: "pointer" }}
           />
+          <nav className="header-nav">
+            <span
+              className={`header-nav-item${location.pathname === "/" ? " active" : ""}`}
+              onClick={() => navigate("/")}
+            >
+              {t("nav.collections")}
+            </span>
+            <span
+              className={`header-nav-item${location.pathname === "/crawl-tasks" ? " active" : ""}`}
+              onClick={() => navigate("/crawl-tasks")}
+            >
+              {t("nav.crawlTasks")}
+            </span>
+          </nav>
           {collectionTitle && (
-            <Text strong style={{ fontSize: 18, marginLeft: 12 }}>
+            <Text strong className="header-collection-title">
               {collectionTitle}
             </Text>
           )}

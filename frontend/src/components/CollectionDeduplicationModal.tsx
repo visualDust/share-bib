@@ -377,9 +377,10 @@ export default function CollectionDeduplicationModal({
 
   return (
     <Modal
-      title={t("collectionDedup.title")}
+      title={t("collectionDedup.title", { count: duplicates.length })}
       visible={visible}
       onCancel={onClose}
+      className="dedup-modal"
       footer={
         <Space>
           <Button onClick={onClose}>{t("collectionDedup.cancel")}</Button>
@@ -395,40 +396,42 @@ export default function CollectionDeduplicationModal({
           </Button>
         </Space>
       }
-      width="90vw"
-      style={{ maxWidth: "1200px", maxHeight: "90vh" }}
-      bodyStyle={{ padding: "16px", overflow: "hidden" }}
+      width={mobile ? "100vw" : 900}
+      fullScreen={mobile}
+      style={{ maxHeight: mobile ? undefined : "85vh" }}
       maskClosable={false}
     >
       {loading ? (
-        <div style={{ textAlign: "center", padding: "40px" }}>
+        <div style={{ textAlign: "center", padding: "40px 20px" }}>
           <Spin size="large" />
         </div>
       ) : duplicates.length === 0 ? (
-        <div style={{ textAlign: "center", padding: "40px" }}>
+        <div style={{ textAlign: "center", padding: "40px 20px" }}>
           <Text type="secondary">{t("collectionDedup.noDuplicates")}</Text>
         </div>
       ) : (
-        <>
-          <Typography.Paragraph type="secondary" style={{ marginBottom: 16 }}>
-            {t("collectionDedup.subtitle", { count: duplicates.length })}
-          </Typography.Paragraph>
-          <div style={{ maxHeight: "calc(90vh - 280px)", overflow: "auto" }}>
-            {mobile ? (
-              duplicates.map(renderMobileCard)
-            ) : (
-              <Table
-                columns={columns}
-                dataSource={duplicates}
-                pagination={false}
-                rowKey={(record) =>
-                  record ? `${record.paper1_id}-${record.paper2_id}` : ""
-                }
-                size="small"
-              />
-            )}
-          </div>
-        </>
+        <div
+          style={{
+            maxHeight: mobile ? "calc(100vh - 200px)" : "calc(85vh - 200px)",
+            overflow: "auto",
+          }}
+        >
+          {mobile ? (
+            <div style={{ padding: "0 20px" }}>
+              {duplicates.map(renderMobileCard)}
+            </div>
+          ) : (
+            <Table
+              columns={columns}
+              dataSource={duplicates}
+              pagination={false}
+              rowKey={(record) =>
+                record ? `${record.paper1_id}-${record.paper2_id}` : ""
+              }
+              size="small"
+            />
+          )}
+        </div>
       )}
     </Modal>
   );

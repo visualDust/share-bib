@@ -36,6 +36,8 @@ def init_db():
         CollectionPaper,
         CollectionPermission,
         ImportTask,
+        CrawlTask,
+        CrawlTaskRun,
     )
 
     Base.metadata.create_all(bind=engine)

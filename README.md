@@ -11,6 +11,10 @@ Your labmate opens the link you shared → exports the `.bib` → imports it int
 <table>
   <tr>
     <td><img src="docs/images/index.png" alt="Collection index" width="400"></td>
+    <td><img src="docs/images/collection.png" alt="Collection detail" width="400"></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/crawl.png" alt="Crawl tasks" width="400"></td>
     <td><img src="docs/images/import.png" alt="Import .bib" width="400"></td>
   </tr>
   <tr>
@@ -23,6 +27,7 @@ Your labmate opens the link you shared → exports the `.bib` → imports it int
 
 - Self-hosted, local login or OAuth
 - Import and export `.bib` files (works with Zotero, etc.)
+- Scheduled crawl tasks: auto-fetch new papers from arXiv RSS with keyword filtering (`+required`, `-excluded`, `*wildcard`)
 - Duplication detection and merging
 - Organize papers into collections with per-user access control
 - i18n support (English, 中文)

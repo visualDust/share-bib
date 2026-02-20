@@ -11,6 +11,8 @@ from api.import_tasks import router as import_router
 from api.users import router as users_router
 from api.admin import router as admin_router
 from api.system import router as system_router
+from api.crawl_tasks import router as crawl_tasks_router
+from crawl.scheduler import scheduler
 
 app = FastAPI(title="Paper Collector", version="0.1.0")
 
@@ -33,11 +35,18 @@ app.include_router(import_router)
 app.include_router(users_router)
 app.include_router(admin_router)
 app.include_router(system_router)
+app.include_router(crawl_tasks_router)
 
 
 @app.on_event("startup")
-def on_startup():
+async def on_startup():
     init_db()
+    await scheduler.start()
+
+
+@app.on_event("shutdown")
+async def on_shutdown():
+    await scheduler.stop()
 
 
 @app.get("/api/stats")

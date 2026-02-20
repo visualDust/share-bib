@@ -157,47 +157,46 @@ export default function DuplicateReviewModal({
       onOk={() => onConfirm(decisions as any)}
       okText={t("duplicateReview.confirm")}
       cancelText={t("duplicateReview.cancel")}
-      width={1100}
-      style={{ maxHeight: "90vh" }}
-      bodyStyle={{
-        maxHeight: "calc(90vh - 180px)",
-        overflow: "auto",
-        padding: "24px",
-      }}
+      className="dedup-modal"
+      width={window.innerWidth < 768 ? "100vw" : 900}
+      fullScreen={window.innerWidth < 768}
+      style={{ maxHeight: window.innerWidth < 768 ? undefined : "85vh" }}
       maskClosable={false}
     >
-      <Typography.Paragraph type="secondary" style={{ marginBottom: 16 }}>
-        {t("duplicateReview.subtitle", { count: duplicates.length })}
-      </Typography.Paragraph>
-      <Space style={{ marginBottom: 16 }}>
-        <Typography.Text strong>
-          {t("duplicateReview.quickActions")}:
-        </Typography.Text>
-        <Button
-          size="small"
-          theme="solid"
-          type="primary"
-          onClick={() => applyToAll("keep_existing")}
-        >
-          {t("duplicateReview.action.keepExisting")}
-        </Button>
-        <Button
-          size="small"
-          theme="solid"
-          type="secondary"
-          onClick={() => applyToAll("use_new")}
-        >
-          {t("duplicateReview.action.useNew")}
-        </Button>
-        <Button
-          size="small"
-          theme="solid"
-          type="tertiary"
-          onClick={() => applyToAll("skip")}
-        >
-          {t("duplicateReview.action.skip")}
-        </Button>
-      </Space>
+      <div style={{ padding: "0 20px" }}>
+        <Typography.Paragraph type="secondary" style={{ marginBottom: 16 }}>
+          {t("duplicateReview.subtitle", { count: duplicates.length })}
+        </Typography.Paragraph>
+        <Space style={{ marginBottom: 16 }}>
+          <Typography.Text strong>
+            {t("duplicateReview.quickActions")}:
+          </Typography.Text>
+          <Button
+            size="small"
+            theme="solid"
+            type="primary"
+            onClick={() => applyToAll("keep_existing")}
+          >
+            {t("duplicateReview.action.keepExisting")}
+          </Button>
+          <Button
+            size="small"
+            theme="solid"
+            type="secondary"
+            onClick={() => applyToAll("use_new")}
+          >
+            {t("duplicateReview.action.useNew")}
+          </Button>
+          <Button
+            size="small"
+            theme="solid"
+            type="tertiary"
+            onClick={() => applyToAll("skip")}
+          >
+            {t("duplicateReview.action.skip")}
+          </Button>
+        </Space>
+      </div>
       <Table
         columns={columns}
         dataSource={duplicates}

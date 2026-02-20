@@ -5,6 +5,8 @@ from .collection_paper import CollectionPaper
 from .collection_permission import CollectionPermission
 from .import_task import ImportTask
 from .user_paper_meta import UserPaperMeta
+from .crawl_task import CrawlTask
+from .crawl_task_run import CrawlTaskRun
 
 __all__ = [
     "User",
@@ -14,4 +16,6 @@ __all__ = [
     "CollectionPermission",
     "ImportTask",
     "UserPaperMeta",
+    "CrawlTask",
+    "CrawlTaskRun",
 ]

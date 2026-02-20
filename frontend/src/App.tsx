@@ -6,6 +6,7 @@ import Setup from "./pages/Setup";
 import Home from "./pages/Home";
 import CollectionDetail from "./pages/CollectionDetail";
 import Import from "./pages/Import";
+import CrawlTasks from "./pages/CrawlTasks";
 import UserProfile from "./pages/UserProfile";
 import Admin from "./pages/Admin";
 import Settings from "./pages/Settings";
@@ -107,6 +108,7 @@ export default function App() {
                       element={<CollectionDetail />}
                     />
                     <Route path="/import" element={<Import />} />
+                    <Route path="/crawl-tasks" element={<CrawlTasks />} />
                     <Route path="/user/:username" element={<UserProfile />} />
                     <Route path="/admin" element={<Admin />} />
                     <Route path="/settings" element={<Settings />} />
