@@ -399,7 +399,29 @@
     "apiKeyHint": {
       "semantic_scholar_api_key": "Get a free key at semanticscholar.org/product/api. Without a key, requests share a public pool and may be rate-limited.",
       "openreview_token": "Your OpenReview account token for accessing conference papers."
-    }
+    },
+    "sdkApiKeys": "SDK API Keys",
+    "sdkApiKeysDesc": "Create API keys for programmatic access to your collections and papers via the Python SDK.",
+    "createApiKey": "Create API Key",
+    "apiKeyName": "Key Name",
+    "apiKeyNamePlaceholder": "e.g. My Crawler Script",
+    "apiKeyNameRequired": "Please enter a key name",
+    "create": "Create",
+    "apiKeyCreated": "API Key Created",
+    "apiKeyWarning": "⚠️ Save this key now! You won't be able to see it again.",
+    "copyToClipboard": "Copy to Clipboard",
+    "copied": "Copied to clipboard",
+    "close": "Close",
+    "keyPrefix": "Key Prefix",
+    "status": "Status",
+    "active": "Active",
+    "inactive": "Inactive",
+    "activate": "Activate",
+    "deactivate": "Deactivate",
+    "lastUsed": "Last Used",
+    "created": "Created",
+    "noApiKeys": "No API keys created yet",
+    "apiKeyToggled": "API key status updated"
   },
   "crawl": {
     "title": "Crawl Tasks",

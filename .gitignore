@@ -7,6 +7,10 @@ tmp/
 node_modules/
 frontend/dist/
 
+# Docker Compose (may contain sensitive config)
+docker-compose.yml
+docker-compose.override.yml
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sharebib"
+version = "0.1.0"
+description = "Python SDK for ShareBib API"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "VisualDust", email = "gavin@gong.host"}
+]
+maintainers = [
+    {name = "VisualDust", email = "gavin@gong.host"}
+]
+dependencies = [
+    "requests>=2.31.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/visualdust/sharebib"
+Documentation = "https://github.com/visualdust/sharebib/tree/main/sdk"
+Repository = "https://github.com/visualdust/sharebib"
+Issues = "https://github.com/visualdust/sharebib/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["sharebib*"]

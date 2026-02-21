@@ -8,6 +8,7 @@ from .user_paper_meta import UserPaperMeta
 from .crawl_task import CrawlTask
 from .crawl_task_run import CrawlTaskRun
 from .user_setting import UserSetting
+from .api_key import ApiKey
 
 __all__ = [
     "User",
@@ -20,4 +21,5 @@ __all__ = [
     "CrawlTask",
     "CrawlTaskRun",
     "UserSetting",
+    "ApiKey",
 ]

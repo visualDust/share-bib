@@ -13,6 +13,8 @@ from api.admin import router as admin_router
 from api.system import router as system_router
 from api.crawl_tasks import router as crawl_tasks_router
 from api.user_settings import router as user_settings_router
+from api.api_keys import router as api_keys_router
+from api.sdk import router as sdk_router
 from crawl.scheduler import scheduler
 
 app = FastAPI(title="Paper Collector", version="0.1.0")
@@ -38,6 +40,8 @@ app.include_router(admin_router)
 app.include_router(system_router)
 app.include_router(crawl_tasks_router)
 app.include_router(user_settings_router)
+app.include_router(api_keys_router)
+app.include_router(sdk_router)
 
 
 @app.on_event("startup")

@@ -55,10 +55,34 @@ def load_config() -> AppConfig:
     admin_user = os.environ.get("ADMIN_USERNAME", "")
     data_dir = os.environ.get("DATA_DIR", "../data")
 
+    # OAuth env vars
+    oauth_client_id = os.environ.get("OAUTH_CLIENT_ID", "")
+    oauth_client_secret = os.environ.get("OAUTH_CLIENT_SECRET", "")
+    oauth_authorize_url = os.environ.get("OAUTH_AUTHORIZE_URL", "")
+    oauth_token_url = os.environ.get("OAUTH_TOKEN_URL", "")
+    oauth_userinfo_url = os.environ.get("OAUTH_USERINFO_URL", "")
+    oauth_redirect_uri = os.environ.get("OAUTH_REDIRECT_URI", "")
+    oauth_scopes = (
+        os.environ.get("OAUTH_SCOPES", "").split(",")
+        if os.environ.get("OAUTH_SCOPES")
+        else []
+    )
+    oauth_admin_group = os.environ.get("OAUTH_ADMIN_GROUP", "")
+
     cfg = AppConfig(
         auth=AuthConfig(
             type=auth_type,
             jwt=JWTConfig(secret_key=jwt_secret),
+            oauth=OAuthConfig(
+                client_id=oauth_client_id,
+                client_secret=oauth_client_secret,
+                authorization_endpoint=oauth_authorize_url,
+                token_endpoint=oauth_token_url,
+                userinfo_endpoint=oauth_userinfo_url,
+                redirect_uri=oauth_redirect_uri,
+                scopes=oauth_scopes if oauth_scopes else ["openid", "profile", "email"],
+                admin_group=oauth_admin_group if oauth_admin_group else "admins",
+            ),
         ),
         admin_username=admin_user,
         data_dir=data_dir,
@@ -80,6 +104,24 @@ def load_config() -> AppConfig:
         cfg.admin_username = os.environ["ADMIN_USERNAME"]
     if os.environ.get("DATA_DIR"):
         cfg.data_dir = os.environ["DATA_DIR"]
+
+    # OAuth env vars override config.yaml
+    if os.environ.get("OAUTH_CLIENT_ID"):
+        cfg.auth.oauth.client_id = os.environ["OAUTH_CLIENT_ID"]
+    if os.environ.get("OAUTH_CLIENT_SECRET"):
+        cfg.auth.oauth.client_secret = os.environ["OAUTH_CLIENT_SECRET"]
+    if os.environ.get("OAUTH_AUTHORIZE_URL"):
+        cfg.auth.oauth.authorization_endpoint = os.environ["OAUTH_AUTHORIZE_URL"]
+    if os.environ.get("OAUTH_TOKEN_URL"):
+        cfg.auth.oauth.token_endpoint = os.environ["OAUTH_TOKEN_URL"]
+    if os.environ.get("OAUTH_USERINFO_URL"):
+        cfg.auth.oauth.userinfo_endpoint = os.environ["OAUTH_USERINFO_URL"]
+    if os.environ.get("OAUTH_REDIRECT_URI"):
+        cfg.auth.oauth.redirect_uri = os.environ["OAUTH_REDIRECT_URI"]
+    if os.environ.get("OAUTH_SCOPES"):
+        cfg.auth.oauth.scopes = os.environ["OAUTH_SCOPES"].split(",")
+    if os.environ.get("OAUTH_ADMIN_GROUP"):
+        cfg.auth.oauth.admin_group = os.environ["OAUTH_ADMIN_GROUP"]
 
     # 4. Auto-generate JWT secret if still empty
     if not cfg.auth.jwt.secret_key:

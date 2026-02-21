@@ -399,7 +399,29 @@
     "apiKeyHint": {
       "semantic_scholar_api_key": "在 semanticscholar.org/product/api 免费申请。没有密钥时使用公共池，可能被限流。",
       "openreview_token": "你的 OpenReview 账号 token，用于访问会议论文。"
-    }
+    },
+    "sdkApiKeys": "SDK API 密钥",
+    "sdkApiKeysDesc": "创建 API 密钥以通过 Python SDK 程序化访问你的文献集和论文。",
+    "createApiKey": "创建 API 密钥",
+    "apiKeyName": "密钥名称",
+    "apiKeyNamePlaceholder": "例如：我的爬虫脚本",
+    "apiKeyNameRequired": "请输入密钥名称",
+    "create": "创建",
+    "apiKeyCreated": "API 密钥已创建",
+    "apiKeyWarning": "⚠️ 请立即保存此密钥！你将无法再次查看它。",
+    "copyToClipboard": "复制到剪贴板",
+    "copied": "已复制到剪贴板",
+    "close": "关闭",
+    "keyPrefix": "密钥前缀",
+    "status": "状态",
+    "active": "活跃",
+    "inactive": "已停用",
+    "activate": "启用",
+    "deactivate": "停用",
+    "lastUsed": "最后使用",
+    "created": "创建时间",
+    "noApiKeys": "尚未创建 API 密钥",
+    "apiKeyToggled": "API 密钥状态已更新"
   },
   "crawl": {
     "title": "爬取任务",

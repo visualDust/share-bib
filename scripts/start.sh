@@ -1,17 +1,23 @@
 #!/bin/bash
 
-# PACO - Startup Script
+# ShareBib - Startup Script
 
 SESSION_NAME="PACO"
 DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
-# Load backend .env (ports)
-set -a
-source "$DIR/backend/.env"
-set +a
+# Load backend .env (ports and config)
+if [ -f "$DIR/backend/.env" ]; then
+    set -a
+    source "$DIR/backend/.env"
+    set +a
+else
+    echo "Warning: backend/.env not found. Using defaults."
+    echo "Copy backend/.env.example to backend/.env to customize configuration."
+fi
 
 BACKEND_PORT=${BACKEND_PORT:-11550}
 FRONTEND_PORT=${FRONTEND_PORT:-11551}
+ALLOWED_HOSTS=${ALLOWED_HOSTS:-}
 
 if tmux has-session -t $SESSION_NAME 2>/dev/null; then
     echo "Session '$SESSION_NAME' already exists. Attaching..."
@@ -31,7 +37,7 @@ tmux send-keys -t $SESSION_NAME:1 "cd $DIR/frontend && echo 'Starting Frontend..
 
 # Window 2: Info
 tmux new-window -t $SESSION_NAME:2 -n "info"
-tmux send-keys -t $SESSION_NAME:2 "echo 'PACO services started!'" C-m
+tmux send-keys -t $SESSION_NAME:2 "echo 'ShareBib services started!'" C-m
 tmux send-keys -t $SESSION_NAME:2 "echo ''" C-m
 tmux send-keys -t $SESSION_NAME:2 "echo 'Backend:  http://localhost:$BACKEND_PORT/docs'" C-m
 tmux send-keys -t $SESSION_NAME:2 "echo 'Frontend: http://localhost:$FRONTEND_PORT'" C-m
@@ -39,9 +45,13 @@ tmux send-keys -t $SESSION_NAME:2 "echo ''" C-m
 tmux send-keys -t $SESSION_NAME:2 "echo 'Config:   backend/.env'" C-m
 tmux send-keys -t $SESSION_NAME:2 "echo 'Data:     data/'" C-m
 tmux send-keys -t $SESSION_NAME:2 "echo ''" C-m
+if [ -n "$ALLOWED_HOSTS" ]; then
+    tmux send-keys -t $SESSION_NAME:2 "echo 'Allowed hosts: $ALLOWED_HOSTS'" C-m
+    tmux send-keys -t $SESSION_NAME:2 "echo ''" C-m
+fi
 tmux send-keys -t $SESSION_NAME:2 "echo 'Ctrl+B then 0/1/2 to switch windows'" C-m
 tmux send-keys -t $SESSION_NAME:2 "echo 'Ctrl+B then D to detach'" C-m
-tmux send-keys -t $SESSION_NAME:2 "echo './stop.sh to stop all services'" C-m
+tmux send-keys -t $SESSION_NAME:2 "echo './scripts/stop.sh to stop all services'" C-m
 
 tmux select-window -t $SESSION_NAME:2
 tmux attach-session -t $SESSION_NAME

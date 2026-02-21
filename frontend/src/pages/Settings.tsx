@@ -39,6 +39,15 @@ interface ApiKeySetting {
   is_set: boolean;
 }
 
+interface UserApiKey {
+  id: string;
+  name: string;
+  key_prefix: string;
+  is_active: boolean;
+  last_used_at: string | null;
+  created_at: string;
+}
+
 export default function Settings() {
   const navigate = useNavigate();
   const { t, i18n } = useTranslation();
@@ -79,10 +88,24 @@ export default function Settings() {
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState("");
 
+  // User API Keys (for SDK access)
+  const [userApiKeys, setUserApiKeys] = useState<UserApiKey[]>([]);
+  const [createKeyVisible, setCreateKeyVisible] = useState(false);
+  const [newKeyName, setNewKeyName] = useState("");
+  const [createdKey, setCreatedKey] = useState<string | null>(null);
+  const [createdKeyVisible, setCreatedKeyVisible] = useState(false);
+
   const loadApiKeys = () => {
     client
       .get("/user-settings")
       .then((res) => setApiKeys(res.data))
+      .catch(() => {});
+  };
+
+  const loadUserApiKeys = () => {
+    client
+      .get("/api-keys")
+      .then((res) => setUserApiKeys(res.data))
       .catch(() => {});
   };
 
@@ -102,6 +125,7 @@ export default function Settings() {
       .finally(() => setLoading(false));
 
     loadApiKeys();
+    loadUserApiKeys();
 
     // Load branding
     if (status?.branding) {
@@ -266,6 +290,44 @@ export default function Settings() {
       await client.delete(`/user-settings/${key}`);
       Toast.success(t("settings.apiKeyDeleteSuccess"));
       loadApiKeys();
+    } catch {
+      Toast.error(t("settings.apiKeyFailed"));
+    }
+  };
+
+  const handleCreateUserApiKey = async () => {
+    if (!newKeyName.trim()) {
+      Toast.warning(t("settings.apiKeyNameRequired"));
+      return;
+    }
+    try {
+      const res = await client.post("/api-keys", { name: newKeyName.trim() });
+      setCreatedKey(res.data.key);
+      setCreatedKeyVisible(true);
+      setCreateKeyVisible(false);
+      setNewKeyName("");
+      loadUserApiKeys();
+      Toast.success(t("settings.apiKeyCreated"));
+    } catch {
+      Toast.error(t("settings.apiKeyFailed"));
+    }
+  };
+
+  const handleDeleteUserApiKey = async (keyId: string) => {
+    try {
+      await client.delete(`/api-keys/${keyId}`);
+      Toast.success(t("settings.apiKeyDeleteSuccess"));
+      loadUserApiKeys();
+    } catch {
+      Toast.error(t("settings.apiKeyFailed"));
+    }
+  };
+
+  const handleToggleUserApiKey = async (keyId: string) => {
+    try {
+      await client.patch(`/api-keys/${keyId}/toggle`);
+      Toast.success(t("settings.apiKeyToggled"));
+      loadUserApiKeys();
     } catch {
       Toast.error(t("settings.apiKeyFailed"));
     }
@@ -452,6 +514,101 @@ export default function Settings() {
             </div>
           </Card>
         )}
+
+        <Card className="glass-card">
+          <Title heading={5} style={{ marginBottom: 4 }}>
+            {t("settings.sdkApiKeys")}
+          </Title>
+          <Text
+            type="tertiary"
+            style={{ fontSize: 13, display: "block", marginBottom: 16 }}
+          >
+            {t("settings.sdkApiKeysDesc")}
+          </Text>
+          <Button
+            theme="solid"
+            size="small"
+            onClick={() => setCreateKeyVisible(true)}
+            style={{ marginBottom: 16 }}
+          >
+            {t("settings.createApiKey")}
+          </Button>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {userApiKeys.map((key) => (
+              <div
+                key={key.id}
+                style={{
+                  padding: 12,
+                  border: "1px solid var(--semi-color-border)",
+                  borderRadius: 8,
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: 8,
+                  }}
+                >
+                  <Text strong>{key.name}</Text>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <Button
+                      size="small"
+                      onClick={() => handleToggleUserApiKey(key.id)}
+                    >
+                      {key.is_active
+                        ? t("settings.deactivate")
+                        : t("settings.activate")}
+                    </Button>
+                    <Button
+                      size="small"
+                      type="danger"
+                      icon={<IconDelete />}
+                      onClick={() => handleDeleteUserApiKey(key.id)}
+                    />
+                  </div>
+                </div>
+                <div
+                  style={{ display: "flex", flexDirection: "column", gap: 4 }}
+                >
+                  <Text type="tertiary" style={{ fontSize: 12 }}>
+                    {t("settings.keyPrefix")}: {key.key_prefix}...
+                  </Text>
+                  <Text type="tertiary" style={{ fontSize: 12 }}>
+                    {t("settings.status")}:{" "}
+                    <Text
+                      type={key.is_active ? "success" : "tertiary"}
+                      style={{ fontSize: 12 }}
+                    >
+                      {key.is_active
+                        ? t("settings.active")
+                        : t("settings.inactive")}
+                    </Text>
+                  </Text>
+                  {key.last_used_at && (
+                    <Text type="tertiary" style={{ fontSize: 12 }}>
+                      {t("settings.lastUsed")}:{" "}
+                      {new Date(key.last_used_at).toLocaleString()}
+                    </Text>
+                  )}
+                  <Text type="tertiary" style={{ fontSize: 12 }}>
+                    {t("settings.created")}:{" "}
+                    {new Date(key.created_at).toLocaleString()}
+                  </Text>
+                </div>
+              </div>
+            ))}
+            {userApiKeys.length === 0 && (
+              <Text
+                type="tertiary"
+                style={{ textAlign: "center", padding: 16 }}
+              >
+                {t("settings.noApiKeys")}
+              </Text>
+            )}
+          </div>
+        </Card>
 
         <Card className="glass-card">
           <Title heading={5} style={{ marginBottom: 4 }}>
@@ -704,6 +861,83 @@ export default function Settings() {
               </div>
             )}
           </div>
+        </div>
+      </Modal>
+
+      {/* Create API Key Modal */}
+      <Modal
+        title={t("settings.createApiKey")}
+        visible={createKeyVisible}
+        onCancel={() => {
+          setCreateKeyVisible(false);
+          setNewKeyName("");
+        }}
+        footer={
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+            <Button
+              onClick={() => {
+                setCreateKeyVisible(false);
+                setNewKeyName("");
+              }}
+            >
+              {t("settings.cancel")}
+            </Button>
+            <Button theme="solid" onClick={handleCreateUserApiKey}>
+              {t("settings.create")}
+            </Button>
+          </div>
+        }
+      >
+        <div>
+          <label className="form-label">{t("settings.apiKeyName")}</label>
+          <Input
+            value={newKeyName}
+            onChange={(v) => setNewKeyName(v)}
+            placeholder={t("settings.apiKeyNamePlaceholder")}
+          />
+        </div>
+      </Modal>
+
+      {/* Show Created API Key Modal */}
+      <Modal
+        title={t("settings.apiKeyCreated")}
+        visible={createdKeyVisible}
+        onCancel={() => {
+          setCreatedKeyVisible(false);
+          setCreatedKey(null);
+        }}
+        footer={
+          <Button
+            theme="solid"
+            onClick={() => {
+              setCreatedKeyVisible(false);
+              setCreatedKey(null);
+            }}
+          >
+            {t("settings.close")}
+          </Button>
+        }
+      >
+        <div>
+          <Text type="warning" style={{ display: "block", marginBottom: 12 }}>
+            {t("settings.apiKeyWarning")}
+          </Text>
+          <Input
+            value={createdKey || ""}
+            readOnly
+            style={{ fontFamily: "monospace" }}
+          />
+          <Button
+            style={{ marginTop: 8 }}
+            onClick={() => {
+              if (createdKey) {
+                navigator.clipboard.writeText(createdKey);
+                Toast.success(t("settings.copied"));
+              }
+            }}
+          >
+            {t("settings.copyToClipboard")}
+          </Button>
         </div>
       </Modal>
     </div>

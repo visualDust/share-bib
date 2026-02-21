@@ -1,0 +1,57 @@
+# Production Docker Compose Example
+# Copy this file to docker-compose.yml and customize for your deployment
+
+services:
+  sharebib:
+    image: ghcr.io/visualdust/share-bib:latest
+    container_name: sharebib
+    ports:
+      - "80:80"
+    volumes:
+      - ./data:/data
+    environment:
+      # Optional: Set JWT secret (recommended for production)
+      # Generate with: openssl rand -hex 32
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-}
+
+      # Optional: Auth configuration
+      - AUTH_TYPE=simple
+
+      # OAuth configuration (uncomment if using OAuth)
+      # - OAUTH_CLIENT_ID=${OAUTH_CLIENT_ID}
+      # - OAUTH_CLIENT_SECRET=${OAUTH_CLIENT_SECRET}
+      # - OAUTH_AUTHORIZE_URL=${OAUTH_AUTHORIZE_URL}
+      # - OAUTH_TOKEN_URL=${OAUTH_TOKEN_URL}
+      # - OAUTH_USERINFO_URL=${OAUTH_USERINFO_URL}
+      # - OAUTH_REDIRECT_URI=https://papers.example.com/api/auth/oauth/callback
+
+    restart: unless-stopped
+
+    # Optional: Resource limits
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: '2'
+    #       memory: 2G
+    #     reservations:
+    #       cpus: '0.5'
+    #       memory: 512M
+
+    # Optional: Health check
+    # healthcheck:
+    #   test: ["CMD", "curl", "-f", "http://localhost/api/stats"]
+    #   interval: 30s
+    #   timeout: 10s
+    #   retries: 3
+    #   start_period: 40s
+
+# Optional: Use with Traefik reverse proxy
+# networks:
+#   - traefik
+#
+# labels:
+#   - "traefik.enable=true"
+#   - "traefik.http.routers.sharebib.rule=Host(`papers.example.com`)"
+#   - "traefik.http.routers.sharebib.entrypoints=websecure"
+#   - "traefik.http.routers.sharebib.tls.certresolver=letsencrypt"
+#   - "traefik.http.services.sharebib.loadbalancer.server.port=80"
