@@ -1,289 +1,249 @@
-# ShareBib Python SDK
+# ShareBib Python SDK and CLI
 
-Python SDK for interacting with the ShareBib API.
+Python SDK and command-line interface for interacting with the ShareBib API.
 
 ## Installation
+
+### Install from PyPI
+
+```bash
+pip install sharebib
+```
+
+This installs:
+
+- the Python package: `sharebib`
+- the preferred CLI command: `sharebib`
+- the compatibility CLI alias: `sharebib-cli`
+
+### Install the latest unreleased version from GitHub
+
+```bash
+pip install "git+https://github.com/visualdust/share-bib.git#subdirectory=sdk"
+```
+
+### Local development
 
 ```bash
 cd sdk
 pip install -e .
 ```
 
-Or install from PyPI (when published):
-
-```bash
-pip install sharebib
-```
-
-## Quick Start
-
-### 1. Get Your API Key
+## Authentication
 
 1. Log in to your ShareBib instance
-2. Go to Settings
-3. In the "SDK API Keys" section, click "Create API Key"
-4. Give it a name (e.g., "My Crawler Script")
-5. Copy the generated key (starts with `pc_`) - you won't be able to see it again!
+2. Go to **Settings**
+3. In **SDK API Keys**, click **Create API Key**
+4. Copy the generated key (starts with `pc_`)
 
-![API Key Management](api-key-screenshot.png)
+![API Key Management](https://raw.githubusercontent.com/visualdust/share-bib/main/sdk/api-key-screenshot.png)
 
-### 2. Use the SDK
+## Configuration
+
+Supported configuration sources, highest priority first:
+
+1. CLI flags / SDK constructor arguments
+2. Environment variables
+3. Project config: `.sharebib/config.json`
+4. User config: `~/.sharebib/config.json`
+
+### Environment variables
+
+```bash
+export SHAREBIB_API_KEY="pc_your_api_key_here"
+export SHAREBIB_BASE_URL="http://localhost:11550"
+export SHAREBIB_TIMEOUT="30"
+```
+
+> `SHAREBIB_BASE_URL` should be the application root URL. Do **not** append `/api`.
+
+### Config file example
+
+```json
+{
+  "api_key": "pc_your_api_key_here",
+  "base_url": "http://localhost:11550",
+  "timeout": 30
+}
+```
+
+## CLI Quick Start
+
+### Verify auth
+
+```bash
+sharebib auth info
+```
+
+> `sharebib` is the preferred CLI name. `sharebib-cli` remains available as a compatibility alias.
+> You can also run the CLI as `python -m sharebib`.
+
+### List collections
+
+```bash
+sharebib collections list
+```
+
+### Search users for sharing
+
+```bash
+sharebib users search --q "gavin"
+```
+
+### Create a collection
+
+```bash
+sharebib collections create \
+  --title "My Research Papers" \
+  --description "Papers I'm reading" \
+  --visibility private \
+  --tag machine-learning \
+  --tag nlp
+```
+
+### Add a paper
+
+```bash
+sharebib papers add \
+  --collection-id "your-collection-id" \
+  --title "Attention Is All You Need" \
+  --author "Ashish Vaswani" \
+  --author "Noam Shazeer" \
+  --venue "NeurIPS" \
+  --year 2017 \
+  --arxiv-id "1706.03762" \
+  --url-arxiv "https://arxiv.org/abs/1706.03762" \
+  --url-pdf "https://arxiv.org/pdf/1706.03762.pdf" \
+  --tag transformers \
+  --tag attention
+```
+
+### List papers in a collection
+
+```bash
+sharebib papers list --collection-id "your-collection-id"
+```
+
+### Inspect a paper
+
+```bash
+sharebib papers info --id "paper-id"
+```
+
+### Remove a paper from a collection
+
+```bash
+sharebib papers remove --collection-id "your-collection-id" --id "paper-id"
+```
+
+### Search accessible papers
+
+```bash
+sharebib papers search --q "transformer" --limit 10
+```
+
+### Manage collection permissions
+
+```bash
+sharebib collections permissions list --id "your-collection-id"
+sharebib collections permissions add --id "your-collection-id" --user-id "user-id" --permission edit
+sharebib collections permissions remove --id "your-collection-id" --user-id "user-id"
+```
+
+### Export BibTeX
+
+```bash
+sharebib collections export-bibtex --id "your-collection-id" --output ./papers.bib
+```
+
+## SDK Quick Start
 
 ```python
 from sharebib import ShareBibClient
 
-# Initialize the client
 client = ShareBibClient(
-    base_url="http://localhost:11550",  # Your ShareBib instance URL
-    api_key="pc_your_api_key_here"      # Your API key
+    base_url="http://localhost:11550",
+    api_key="pc_your_api_key_here",
 )
 
-# Create a new collection
+me = client.get_current_user()
+print(me.username)
+
 collection = client.create_collection(
     title="My Research Papers",
     description="Papers I'm reading",
     visibility="private",
-    tags=["machine-learning", "nlp"]
+    tags=["machine-learning", "nlp"],
 )
-print(f"Created collection: {collection.title} (ID: {collection.id})")
+print(f"Created collection: {collection.title} ({collection.id})")
 
-# Add a paper to the collection
 paper = client.add_paper(
     collection_id=collection.id,
     title="Attention Is All You Need",
     authors=["Vaswani et al."],
     venue="NeurIPS",
     year=2017,
-    abstract="The dominant sequence transduction models...",
     arxiv_id="1706.03762",
     url_arxiv="https://arxiv.org/abs/1706.03762",
     url_pdf="https://arxiv.org/pdf/1706.03762.pdf",
-    tags=["transformers", "attention"]
+    tags=["transformers", "attention"],
 )
 print(f"Added paper: {paper.title}")
 
-# List all papers in the collection
-papers = client.list_papers(collection.id)
-print(f"Collection has {len(papers)} papers")
+for item in client.list_papers(collection.id):
+    print(item.title)
 
-# List all collections
-collections = client.list_collections()
-for c in collections:
-    print(f"- {c.title} ({c.paper_count} papers)")
+for user in client.search_users("gavin"):
+    print(user.username)
+
+results = client.search_papers("transformer", limit=5)
+print(len(results))
+
+bibtex = client.export_collection_bibtex(collection.id)
+print(bibtex[:120])
 ```
 
-## API Reference
+## API Surface
 
-### Client Initialization
+### Auth
 
-```python
-client = ShareBibClient(base_url, api_key)
-```
+- `get_current_user()` / `auth_info()`
 
-- `base_url`: Base URL of your ShareBib instance (e.g., `http://localhost:11550`)
-- `api_key`: Your API key (get it from Settings page)
+### Users
 
-### Collection Methods
+- `search_users(q, limit=10)`
 
-#### `list_collections() -> list[Collection]`
+### Collections
 
-List all collections accessible by the user.
+- `list_collections()`
+- `create_collection(...)`
+- `get_collection(collection_id)`
+- `list_collection_permissions(collection_id)`
+- `set_collection_permission(collection_id, user_id=..., permission=...)`
+- `remove_collection_permission(collection_id, user_id)`
+- `export_collection_bibtex(collection_id)`
+- `delete_collection(collection_id)`
 
-#### `create_collection(title, description="", visibility="private", tags=None, collection_id=None) -> Collection`
+### Papers
 
-Create a new collection.
-
-- `title`: Collection title (required)
-- `description`: Collection description
-- `visibility`: `"private"`, `"public"`, or `"public_editable"`
-- `tags`: List of tags
-- `collection_id`: Custom ID (optional, auto-generated if not provided)
-
-#### `get_collection(collection_id) -> Collection`
-
-Get a collection by ID.
-
-#### `delete_collection(collection_id) -> None`
-
-Delete a collection.
-
-### Paper Methods
-
-#### `add_paper(collection_id, title, **kwargs) -> Paper`
-
-Create a new paper and add it to a collection.
-
-Required:
-
-- `collection_id`: Collection ID
-- `title`: Paper title
-
-Optional:
-
-- `authors`: List of author names
-- `venue`: Publication venue
-- `year`: Publication year
-- `abstract`: Paper abstract
-- `summary`: Paper summary
-- `arxiv_id`: arXiv ID
-- `doi`: DOI
-- `url_arxiv`: arXiv URL
-- `url_pdf`: PDF URL
-- `url_code`: Code repository URL
-- `url_project`: Project page URL
-- `tags`: List of tags
-
-#### `list_papers(collection_id) -> list[Paper]`
-
-List all papers in a collection.
-
-#### `get_paper(paper_id) -> Paper`
-
-Get a paper by ID.
-
-#### `remove_paper(collection_id, paper_id) -> None`
-
-Remove a paper from a collection.
-
-## Data Models
-
-### Collection
-
-```python
-@dataclass
-class Collection:
-    id: str
-    title: str
-    description: str
-    visibility: str
-    allow_export: bool
-    tags: list[str]
-    created_at: datetime
-    updated_at: datetime
-    paper_count: int
-```
-
-### Paper
-
-```python
-@dataclass
-class Paper:
-    id: str
-    title: str
-    authors: list[str]
-    venue: Optional[str]
-    year: Optional[int]
-    abstract: Optional[str]
-    summary: Optional[str]
-    status: str
-    arxiv_id: Optional[str]
-    doi: Optional[str]
-    url_arxiv: Optional[str]
-    url_pdf: Optional[str]
-    url_code: Optional[str]
-    url_project: Optional[str]
-    tags: list[str]
-    created_at: datetime
-    updated_at: datetime
-```
-
-## Use Cases
-
-### 1. Custom Crawler
-
-```python
-# Crawl papers from your own source and add them to ShareBib
-import requests
-from sharebib import ShareBibClient
-
-client = ShareBibClient("http://localhost:11550", "pc_your_key")
-
-# Create a collection for today's papers
-collection = client.create_collection(
-    title=f"Papers - {datetime.now().strftime('%Y-%m-%d')}",
-    tags=["daily-crawl"]
-)
-
-# Fetch papers from your source
-papers_data = fetch_papers_from_my_source()
-
-# Add each paper to the collection
-for paper_data in papers_data:
-    client.add_paper(
-        collection_id=collection.id,
-        title=paper_data["title"],
-        authors=paper_data["authors"],
-        abstract=paper_data["abstract"],
-        url_pdf=paper_data["pdf_url"]
-    )
-```
-
-### 2. Batch Import
-
-```python
-# Import papers from a CSV or JSON file
-import csv
-from sharebib import ShareBibClient
-
-client = ShareBibClient("http://localhost:11550", "pc_your_key")
-collection = client.create_collection(title="Imported Papers")
-
-with open("papers.csv", "r") as f:
-    reader = csv.DictReader(f)
-    for row in reader:
-        client.add_paper(
-            collection_id=collection.id,
-            title=row["title"],
-            authors=row["authors"].split(";"),
-            year=int(row["year"]) if row["year"] else None,
-            doi=row["doi"]
-        )
-```
-
-### 3. Sync with External Database
-
-```python
-# Keep ShareBib in sync with your research database
-from sharebib import ShareBibClient
-
-client = ShareBibClient("http://localhost:11550", "pc_your_key")
-
-# Get or create a collection
-collections = client.list_collections()
-my_collection = next((c for c in collections if c.title == "My Papers"), None)
-if not my_collection:
-    my_collection = client.create_collection(title="My Papers")
-
-# Sync papers
-existing_papers = {p.doi: p for p in client.list_papers(my_collection.id) if p.doi}
-new_papers = fetch_from_my_database()
-
-for paper in new_papers:
-    if paper["doi"] not in existing_papers:
-        client.add_paper(
-            collection_id=my_collection.id,
-            title=paper["title"],
-            doi=paper["doi"],
-            # ... other fields
-        )
-```
+- `add_paper(collection_id, title, ...)`
+- `list_papers(collection_id)`
+- `search_papers(q, limit=50, year=None, status=None)`
+- `get_paper(paper_id)`
+- `remove_paper(collection_id, paper_id)`
 
 ## Error Handling
 
-The SDK raises `requests.HTTPError` for API errors:
-
 ```python
-from requests import HTTPError
+from sharebib import ShareBibAPIError, ShareBibClient
+
+client = ShareBibClient("http://localhost:11550", "pc_your_api_key_here")
 
 try:
-    collection = client.get_collection("nonexistent-id")
-except HTTPError as e:
-    if e.response.status_code == 404:
-        print("Collection not found")
-    elif e.response.status_code == 403:
-        print("Access denied")
-    else:
-        print(f"Error: {e}")
+    client.get_collection("nonexistent-id")
+except ShareBibAPIError as exc:
+    print(exc)
+    print(exc.status_code)
 ```
 
 ## License

@@ -42,20 +42,20 @@ def check_collection_permission(
         return True
 
     # Check explicit permissions (for private/shared collections, or to override defaults)
-    perm = (
+    perms = (
         db.query(CollectionPermission)
         .filter(
             CollectionPermission.collection_id == collection_id,
             CollectionPermission.user_id == user_id,
         )
-        .first()
+        .all()
     )
-    if not perm:
+    if not perms:
         return False
 
     if required_permission == "view":
-        return perm.permission in ("view", "edit")
+        return any(perm.permission in ("view", "edit") for perm in perms)
     elif required_permission == "edit":
-        return perm.permission == "edit"
+        return any(perm.permission == "edit" for perm in perms)
 
     return False

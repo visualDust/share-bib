@@ -1,4 +1,4 @@
-# Share bib
+# ShareBib
 
 A simple, self-hosted tool for managing and sharing BibTeX collections with labmates.
 
@@ -30,7 +30,7 @@ Your labmate opens the link you shared → exports the `.bib` → imports it int
 - Scheduled crawl tasks: auto-fetch new papers from arXiv RSS with keyword filtering (`+required`, `-excluded`, `*wildcard`)
 - Duplication detection and merging
 - Organize papers into collections with per-user access control
-- **Python SDK for programmatic access** - automate paper management with your own scripts
+- **SDK and CLI for programmatic access and Agent skills** - automate paper management with your own scripts or shell workflows, as well as use with AI agents.
 - i18n support (English, 中文)
 - Desktop and mobile page layout
 
@@ -38,6 +38,80 @@ Your labmate opens the link you shared → exports the `.bib` → imports it int
 
 - Simple auth (username/password)
 - OAuth with [Authentik](https://goauthentik.io/)
+
+## Installation
+
+### Claude Code
+
+```bash
+/plugin marketplace add visualdust/share-bib
+/plugin install sharebib
+```
+
+### Other AI Agents
+
+Using [vercel-labs/skills](https://skills.sh/):
+
+```bash
+npx skills add visualdust/share-bib -a codex    # Codex
+npx skills add visualdust/share-bib -a cursor   # Cursor
+npx skills add visualdust/share-bib -a windsurf # Windsurf
+```
+
+### Prerequisites
+
+Install the ShareBib CLI tool required by the skill:
+
+```bash
+pip install sharebib
+```
+
+## AI Agent Quick Start
+
+### 1. Get Your API Key
+
+1. Log in to your ShareBib instance.
+2. Go to **Settings**.
+3. In **SDK API Keys**, click **Create API Key**.
+4. Copy the generated key (starts with `pc_`).
+
+### 2. Configure Authentication
+
+Set environment variables:
+
+```bash
+export SHAREBIB_API_KEY="pc_xxxxxxxxxxxxxxxxxxxxxxxxx"
+export SHAREBIB_BASE_URL="https://papers.example.com"
+export SHAREBIB_TIMEOUT="30"
+```
+
+Or create `.sharebib/config.json`:
+
+```json
+{
+  "api_key": "pc_xxxxxxxxxxxxxxxxxxxxxxxxx",
+  "base_url": "https://papers.example.com",
+  "timeout": 30
+}
+```
+
+### 3. Use with Your AI Agent
+
+Once installed, your AI agent can help with ShareBib workflows such as:
+
+```text
+List my accessible collections in ShareBib
+Create a private reading-list collection for systems papers
+Find Gavin's ShareBib user account so I can share a collection
+Export the BibTeX for collection 1234 to a file
+Search papers for "transformer" and summarize the top results
+```
+
+## Documentation
+
+- [skills/sharebib/SKILL.md](skills/sharebib/SKILL.md) - agent-facing skill instructions and command reference
+- [sdk/README.md](sdk/README.md) - Python SDK and CLI usage
+- [AGENTS.md](AGENTS.md) - repository-level agent instructions
 
 ## Deploy with Docker
 
@@ -173,17 +247,33 @@ ALLOWED_HOSTS=  # Leave empty for localhost, or add your domain
 
 Requires: Python 3.13+, Node.js 20+, [uv](https://docs.astral.sh/uv/), tmux
 
-## Python SDK
+## Python SDK and CLI
 
-Automate paper management with the Python SDK. Perfect for custom crawlers or batch imports.
+Automate paper management with the Python SDK and CLI. Perfect for custom crawlers, batch imports, and agent-facing shell workflows.
 
 ### Installation
 
 ```bash
-# Install from source
+pip install sharebib
+```
+
+For local development:
+
+```bash
 cd sdk
 pip install -e .
 ```
+
+For the latest unreleased version from GitHub:
+
+```bash
+pip install "git+https://github.com/visualdust/share-bib.git#subdirectory=sdk"
+```
+
+This installs both:
+
+- the Python package: `sharebib`
+- the CLI commands: `sharebib` and `sharebib-cli`
 
 ### Quick Start
 
@@ -219,7 +309,20 @@ for p in papers:
     print(f"{p.title} ({p.year})")
 ```
 
-See [`sdk/README.md`](sdk/README.md) for full documentation and [`sdk/example.py`](sdk/example.py) for comprehensive examples.
+CLI example:
+
+```bash
+sharebib auth info
+sharebib users search --q "gavin"
+sharebib collections list
+sharebib collections permissions list --id "collection-id"
+sharebib collections export-bibtex --id "collection-id" --output ./papers.bib
+sharebib papers search --q "transformer"
+```
+
+`sharebib` is the preferred command name; `sharebib-cli` remains available as a compatibility alias.
+
+See [`sdk/README.md`](sdk/README.md) for full SDK/CLI documentation and [`sdk/example.py`](sdk/example.py) for comprehensive examples.
 
 ## Build from source
 

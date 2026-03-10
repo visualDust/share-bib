@@ -1,12 +1,25 @@
-"""
-ShareBib Python SDK
-
-A Python client library for interacting with the ShareBib API.
-"""
+"""ShareBib Python SDK."""
 
 __version__ = "0.1.0"
 
 from .client import ShareBibClient
-from .models import Collection, Paper
+from .exceptions import ShareBibAPIError, ShareBibConfigError, ShareBibError
+from .models import (
+    Collection,
+    CollectionPermissionEntry,
+    CurrentUser,
+    Paper,
+    UserSummary,
+)
 
-__all__ = ["ShareBibClient", "Collection", "Paper"]
+__all__ = [
+    "ShareBibClient",
+    "ShareBibError",
+    "ShareBibConfigError",
+    "ShareBibAPIError",
+    "CurrentUser",
+    "UserSummary",
+    "CollectionPermissionEntry",
+    "Collection",
+    "Paper",
+]

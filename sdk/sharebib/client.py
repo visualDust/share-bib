@@ -1,47 +1,136 @@
-"""
-ShareBib API Client
+"""ShareBib API client."""
 
-Main client class for interacting with the ShareBib API.
-"""
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any, Optional
 
 import requests
-from typing import Optional
-from .models import Collection, Paper
+
+from .config import ConfigManager, normalize_base_url, validate_api_key
+from .exceptions import ShareBibAPIError, ShareBibConfigError
+from .models import (
+    Collection,
+    CollectionPermissionEntry,
+    CurrentUser,
+    Paper,
+    UserSummary,
+)
 
 
 class ShareBibClient:
-    """Client for ShareBib API"""
+    """Client for interacting with the ShareBib SDK API."""
 
-    def __init__(self, base_url: str, api_key: str):
-        """
-        Initialize the ShareBib client.
+    def __init__(
+        self,
+        base_url: str | None = None,
+        api_key: str | None = None,
+        timeout: int | None = None,
+        config_path: str | Path | None = None,
+    ):
+        config = ConfigManager.load_config(
+            Path(config_path) if config_path is not None else None,
+            require_api_key=False,
+        )
 
-        Args:
-            base_url: Base URL of the ShareBib API (e.g., "http://localhost:11550")
-            api_key: Your API key (starts with "pc_")
-        """
-        self.base_url = base_url.rstrip("/")
-        self.api_key = api_key
+        resolved_api_key = api_key or config.get("api_key")
+        if not isinstance(resolved_api_key, str) or not resolved_api_key:
+            raise ShareBibConfigError(
+                "API key not found. Set SHAREBIB_API_KEY or provide api_key explicitly."
+            )
+        validate_api_key(resolved_api_key)
+
+        resolved_base_url = base_url or config.get("base_url")
+        if not isinstance(resolved_base_url, str) or not resolved_base_url:
+            resolved_base_url = ConfigManager.DEFAULT_BASE_URL
+
+        resolved_timeout = timeout if timeout is not None else config.get("timeout")
+        if not isinstance(resolved_timeout, int) or resolved_timeout <= 0:
+            raise ShareBibConfigError("Timeout must be a positive integer")
+
+        self.base_url = normalize_base_url(resolved_base_url)
+        self.api_key = resolved_api_key
+        self.timeout = resolved_timeout
         self.session = requests.Session()
-        self.session.headers.update({"X-API-Key": api_key})
+        self.session.headers.update(
+            {
+                "X-API-Key": self.api_key,
+                "Accept": "application/json",
+                "User-Agent": "sharebib-sdk/0.1.0",
+            }
+        )
 
-    def _request(self, method: str, endpoint: str, **kwargs) -> requests.Response:
-        """Make an API request"""
+    def _request(
+        self,
+        method: str,
+        endpoint: str,
+        *,
+        expect_json: bool = True,
+        **kwargs: Any,
+    ) -> Any:
+        """Make an HTTP request to the ShareBib API."""
         url = f"{self.base_url}{endpoint}"
-        response = self.session.request(method, url, **kwargs)
-        response.raise_for_status()
-        return response
 
-    # Collection methods
+        try:
+            response = self.session.request(method, url, timeout=self.timeout, **kwargs)
+        except requests.RequestException as exc:
+            raise ShareBibAPIError(f"Connection error: {exc}") from exc
+
+        try:
+            response.raise_for_status()
+        except requests.HTTPError as exc:
+            message = f"HTTP {response.status_code}: {response.reason}"
+            response_data: Any = None
+            try:
+                response_data = response.json()
+                if isinstance(response_data, dict):
+                    message = (
+                        response_data.get("detail")
+                        or response_data.get("message")
+                        or message
+                    )
+            except ValueError:
+                if response.text:
+                    response_data = response.text
+            raise ShareBibAPIError(
+                message,
+                status_code=response.status_code,
+                response=response_data,
+            ) from exc
+
+        if not expect_json:
+            return response.text
+
+        if response.status_code == 204 or not response.content:
+            return None
+
+        try:
+            return response.json()
+        except ValueError as exc:
+            raise ShareBibAPIError("Unexpected response format: expected JSON") from exc
+
+    def get_current_user(self) -> CurrentUser:
+        """Get information about the authenticated user."""
+        response = self._request("GET", "/api/sdk/me")
+        return CurrentUser.from_dict(response)
+
+    def auth_info(self) -> CurrentUser:
+        """Alias for get_current_user, convenient for CLI/auth workflows."""
+        return self.get_current_user()
+
+    def search_users(self, q: str, *, limit: int = 10) -> list[UserSummary]:
+        """Search users by username for sharing workflows."""
+        response = self._request(
+            "GET",
+            "/api/sdk/users/search",
+            params={"q": q, "limit": limit},
+        )
+        return [UserSummary.from_dict(item) for item in response]
+
     def list_collections(self) -> list[Collection]:
-        """
-        List all collections accessible by the user.
-
-        Returns:
-            List of Collection objects
-        """
+        """List all collections accessible by the authenticated user."""
         response = self._request("GET", "/api/sdk/collections")
-        return [Collection.from_dict(c) for c in response.json()]
+        return [Collection.from_dict(item) for item in response]
 
     def create_collection(
         self,
@@ -51,54 +140,67 @@ class ShareBibClient:
         tags: Optional[list[str]] = None,
         collection_id: Optional[str] = None,
     ) -> Collection:
-        """
-        Create a new collection.
-
-        Args:
-            title: Collection title
-            description: Collection description (optional)
-            visibility: Visibility setting ("private", "public", or "public_editable")
-            tags: List of tags (optional)
-            collection_id: Custom collection ID (optional, auto-generated if not provided)
-
-        Returns:
-            Created Collection object
-        """
-        data = {
+        """Create a new collection."""
+        payload: dict[str, Any] = {
             "title": title,
             "description": description,
             "visibility": visibility,
             "tags": tags or [],
         }
         if collection_id:
-            data["id"] = collection_id
+            payload["id"] = collection_id
 
-        response = self._request("POST", "/api/sdk/collections", json=data)
-        return Collection.from_dict(response.json())
+        response = self._request("POST", "/api/sdk/collections", json=payload)
+        return Collection.from_dict(response)
 
     def get_collection(self, collection_id: str) -> Collection:
-        """
-        Get a collection by ID.
-
-        Args:
-            collection_id: Collection ID
-
-        Returns:
-            Collection object
-        """
+        """Get a collection by ID."""
         response = self._request("GET", f"/api/sdk/collections/{collection_id}")
-        return Collection.from_dict(response.json())
+        return Collection.from_dict(response)
 
     def delete_collection(self, collection_id: str) -> None:
-        """
-        Delete a collection.
-
-        Args:
-            collection_id: Collection ID
-        """
+        """Delete a collection by ID."""
         self._request("DELETE", f"/api/sdk/collections/{collection_id}")
 
-    # Paper methods
+    def list_collection_permissions(
+        self, collection_id: str
+    ) -> list[CollectionPermissionEntry]:
+        """List effective permissions for a collection."""
+        response = self._request(
+            "GET", f"/api/sdk/collections/{collection_id}/permissions"
+        )
+        return [CollectionPermissionEntry.from_dict(item) for item in response]
+
+    def set_collection_permission(
+        self,
+        collection_id: str,
+        *,
+        user_id: str,
+        permission: str,
+    ) -> CollectionPermissionEntry:
+        """Grant or replace a user's permission on a collection."""
+        response = self._request(
+            "POST",
+            f"/api/sdk/collections/{collection_id}/permissions",
+            json={"user_id": user_id, "permission": permission},
+        )
+        return CollectionPermissionEntry.from_dict(response)
+
+    def remove_collection_permission(self, collection_id: str, user_id: str) -> None:
+        """Remove a user's explicit permission from a collection."""
+        self._request(
+            "DELETE",
+            f"/api/sdk/collections/{collection_id}/permissions/{user_id}",
+        )
+
+    def export_collection_bibtex(self, collection_id: str) -> str:
+        """Export a collection as BibTeX text."""
+        return self._request(
+            "GET",
+            f"/api/sdk/collections/{collection_id}/export/bibtex",
+            expect_json=False,
+        )
+
     def add_paper(
         self,
         collection_id: str,
@@ -116,29 +218,8 @@ class ShareBibClient:
         url_project: Optional[str] = None,
         tags: Optional[list[str]] = None,
     ) -> Paper:
-        """
-        Create a new paper and add it to a collection.
-
-        Args:
-            collection_id: Collection ID to add the paper to
-            title: Paper title (required)
-            authors: List of author names
-            venue: Publication venue
-            year: Publication year
-            abstract: Paper abstract
-            summary: Paper summary
-            arxiv_id: arXiv ID
-            doi: DOI
-            url_arxiv: arXiv URL
-            url_pdf: PDF URL
-            url_code: Code repository URL
-            url_project: Project page URL
-            tags: List of tags
-
-        Returns:
-            Created Paper object
-        """
-        data = {
+        """Create a new paper and add it to a collection."""
+        payload = {
             "title": title,
             "authors": authors or [],
             "venue": venue,
@@ -154,44 +235,42 @@ class ShareBibClient:
             "tags": tags or [],
         }
         response = self._request(
-            "POST", f"/api/sdk/collections/{collection_id}/papers", json=data
+            "POST",
+            f"/api/sdk/collections/{collection_id}/papers",
+            json=payload,
         )
-        return Paper.from_dict(response.json())
+        return Paper.from_dict(response)
 
     def list_papers(self, collection_id: str) -> list[Paper]:
-        """
-        List all papers in a collection.
-
-        Args:
-            collection_id: Collection ID
-
-        Returns:
-            List of Paper objects
-        """
+        """List all papers in a collection."""
         response = self._request("GET", f"/api/sdk/collections/{collection_id}/papers")
-        return [Paper.from_dict(p) for p in response.json()]
+        return [Paper.from_dict(item) for item in response]
+
+    def search_papers(
+        self,
+        q: str,
+        *,
+        limit: int = 50,
+        year: int | None = None,
+        status: str | None = None,
+    ) -> list[Paper]:
+        """Search papers visible to the authenticated user."""
+        params: dict[str, Any] = {"q": q, "limit": limit}
+        if year is not None:
+            params["year"] = year
+        if status is not None:
+            params["status"] = status
+        response = self._request("GET", "/api/sdk/papers/search", params=params)
+        return [Paper.from_dict(item) for item in response]
 
     def get_paper(self, paper_id: str) -> Paper:
-        """
-        Get a paper by ID.
-
-        Args:
-            paper_id: Paper ID
-
-        Returns:
-            Paper object
-        """
+        """Get a paper by ID."""
         response = self._request("GET", f"/api/sdk/papers/{paper_id}")
-        return Paper.from_dict(response.json())
+        return Paper.from_dict(response)
 
     def remove_paper(self, collection_id: str, paper_id: str) -> None:
-        """
-        Remove a paper from a collection.
-
-        Args:
-            collection_id: Collection ID
-            paper_id: Paper ID
-        """
+        """Remove a paper from a collection."""
         self._request(
-            "DELETE", f"/api/sdk/collections/{collection_id}/papers/{paper_id}"
+            "DELETE",
+            f"/api/sdk/collections/{collection_id}/papers/{paper_id}",
         )

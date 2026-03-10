@@ -95,6 +95,7 @@ def oauth_callback(code: str, state: str, db: Session = Depends(get_db)):
     groups = userinfo.get("groups", [])
     is_admin = oauth.admin_group in groups if isinstance(groups, list) else False
 
+    # First try to find user by oauth_sub
     user = (
         db.query(User)
         .filter(
@@ -104,12 +105,29 @@ def oauth_callback(code: str, state: str, db: Session = Depends(get_db)):
         .first()
     )
 
+    # If not found by oauth_sub, try to find by email (for migration after OAuth provider changes)
+    email = userinfo.get("email")
+    if user is None and email:
+        user = (
+            db.query(User)
+            .filter(
+                User.email == email,
+                User.oauth_provider.isnot(None),
+            )
+            .first()
+        )
+        if user:
+            # Update oauth_sub and oauth_provider for this user (migration case)
+            user.oauth_sub = oauth_sub
+            user.oauth_provider = oauth.provider
+            db.commit()
+            db.refresh(user)
+
     if user is None:
         # Auto-create user on first OAuth login
         username = (
             userinfo.get("preferred_username") or userinfo.get("email") or oauth_sub
         )
-        email = userinfo.get("email")
         display_name = userinfo.get("name") or username
 
         # Check if username already exists, if so try to link by email

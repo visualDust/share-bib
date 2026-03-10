@@ -60,7 +60,7 @@ def paper_to_bibtex_entry(paper: Dict[str, Any]) -> str:
     )
 
     # Determine entry type
-    venue = paper.get("venue", "").lower()
+    venue = (paper.get("venue") or "").lower()
     if any(conf in venue for conf in ["conference", "proceedings", "workshop"]):
         entry_type = "inproceedings"
     elif any(jour in venue for jour in ["journal", "transactions"]):

@@ -1,0 +1,14 @@
+{
+  "name": "sharebib",
+  "version": "0.1.0",
+  "description": "Operate ShareBib collections and papers - create collections, search users, manage sharing, export BibTeX, and verify SDK API keys",
+  "author": {
+    "name": "VisualDust",
+    "email": "gavin@gong.host",
+    "url": "https://github.com/visualdust"
+  },
+  "repository": "https://github.com/visualdust/share-bib",
+  "license": "MIT",
+  "skills": "./skills/",
+  "keywords": ["sharebib", "bibtex", "research", "papers", "cli", "api-client"]
+}

@@ -1,0 +1,34 @@
+{
+  "name": "sharebib",
+  "owner": {
+    "name": "VisualDust",
+    "email": "gavin@gong.host"
+  },
+  "metadata": {
+    "description": "Claude Code plugin marketplace for ShareBib paper collection operations",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "sharebib",
+      "source": "./",
+      "description": "Operate ShareBib collections and papers - create collections, search users, manage sharing, export BibTeX, and verify SDK API keys",
+      "version": "0.1.0",
+      "author": {
+        "name": "VisualDust",
+        "email": "gavin@gong.host"
+      },
+      "homepage": "https://github.com/visualdust/share-bib",
+      "repository": "https://github.com/visualdust/share-bib",
+      "license": "MIT",
+      "keywords": [
+        "sharebib",
+        "bibtex",
+        "research",
+        "papers",
+        "cli",
+        "api-client"
+      ]
+    }
+  ]
+}
