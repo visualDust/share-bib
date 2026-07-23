@@ -1,5 +1,5 @@
 import { useState, useEffect, createContext, useContext } from "react";
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { Spin } from "@douyinfe/semi-ui-19";
 import Login from "./pages/Login";
 import Setup from "./pages/Setup";
@@ -35,6 +35,21 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
   const token = localStorage.getItem("token");
   if (!token) return <Navigate to="/login" replace />;
   return <>{children}</>;
+}
+
+function LegacyCollectionRedirect() {
+  const location = useLocation();
+  const legacyId = location.pathname.slice("/collections/".length);
+  const normalizedId = legacyId.split("/").filter(Boolean).join("-");
+
+  if (!normalizedId) return <Navigate to="/" replace />;
+
+  return (
+    <Navigate
+      to={`/collections/${normalizedId}${location.search}${location.hash}`}
+      replace
+    />
+  );
 }
 
 export default function App() {
@@ -108,6 +123,8 @@ export default function App() {
             )
           }
         />
+        {/* Redirect legacy IDs that accidentally contained a slash. */}
+        <Route path="/collections/*" element={<LegacyCollectionRedirect />} />
         <Route
           path="/*"
           element={

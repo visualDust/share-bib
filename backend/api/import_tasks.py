@@ -2,6 +2,7 @@ import uuid
 import re
 import json
 import logging
+import xml.etree.ElementTree as ET
 from datetime import datetime, timezone, timedelta
 
 import httpx
@@ -23,6 +24,7 @@ from auth.deps import get_current_user
 from database import get_db, SessionLocal
 from models import User, Paper, Collection, CollectionPaper, ImportTask
 from import_module.bibtex_parser import parse_bibtex_content
+from services.collection_ids import slugify_collection_name
 from services.deduplication import find_duplicate_paper
 
 router = APIRouter(prefix="/api/import", tags=["import"])
@@ -64,6 +66,24 @@ def _msg(lang: str, key: str) -> str:
     return _MESSAGES.get(lang, _MESSAGES["en"]).get(key, key)
 
 
+class ArxivMetadataFetchError(RuntimeError):
+    """User-facing error raised when arXiv metadata cannot be fetched."""
+
+
+def _exception_detail(exc: Exception) -> str:
+    """Return a useful message even for exceptions whose str() is empty.
+
+    httpx timeout exceptions often stringify to an empty string, which made the
+    UI show only "Failed to fetch arXiv metadata:" with no clue about what
+    actually failed.
+    """
+
+    message = str(exc).strip()
+    if message:
+        return message
+    return exc.__class__.__name__
+
+
 def _cleanup_expired_scans():
     """Remove expired scan results from cache."""
     now = datetime.now(timezone.utc)
@@ -100,7 +120,7 @@ def _process_bibtex(
         duplicates_merged = []
 
         # Create collection
-        slug = collection_name.lower().replace(" ", "-")[:50]
+        slug = slugify_collection_name(collection_name)
         cid = f"{slug}-{datetime.now(timezone.utc).strftime('%Y%m%d')}"
         # Ensure unique
         if db.query(Collection).filter(Collection.id == cid).first():
@@ -577,24 +597,50 @@ async def _fetch_arxiv_metadata(arxiv_id: str) -> dict:
 
     api_url = f"https://export.arxiv.org/api/query?id_list={arxiv_id}"
     headers = {"User-Agent": "share-bib/1.0 (https://github.com/visualDust/share-bib)"}
-    async with httpx.AsyncClient(timeout=30) as http:
-        for attempt in range(3):
-            resp = await http.get(api_url, headers=headers)
-            if resp.status_code == 429:
-                await asyncio.sleep(3 * (attempt + 1))
-                continue
-            resp.raise_for_status()
-            break
+    try:
+        async with httpx.AsyncClient(timeout=30, follow_redirects=True) as http:
+            resp: httpx.Response | None = None
+            for attempt in range(3):
+                resp = await http.get(api_url, headers=headers)
+                if resp.status_code == 429:
+                    await asyncio.sleep(3 * (attempt + 1))
+                    continue
+                resp.raise_for_status()
+                break
+            else:
+                if resp is not None:
+                    resp.raise_for_status()
+                raise ArxivMetadataFetchError("No response from arXiv API")
+    except httpx.TimeoutException as e:
+        raise ArxivMetadataFetchError(
+            "Timed out after 30s contacting the arXiv API. Please retry in a moment."
+        ) from e
+    except httpx.HTTPStatusError as e:
+        status_code = e.response.status_code
+        if status_code == 429:
+            detail = "arXiv API rate limit exceeded (HTTP 429). Please retry later."
         else:
-            resp.raise_for_status()
-
-    import xml.etree.ElementTree as ET
+            body = e.response.text.strip().replace("\n", " ")[:200]
+            detail = f"arXiv API returned HTTP {status_code}"
+            if body:
+                detail = f"{detail}: {body}"
+        raise ArxivMetadataFetchError(detail) from e
+    except httpx.RequestError as e:
+        raise ArxivMetadataFetchError(
+            f"Network error contacting the arXiv API ({e.__class__.__name__}): "
+            f"{_exception_detail(e)}"
+        ) from e
 
     ns = {
         "atom": "http://www.w3.org/2005/Atom",
         "arxiv": "http://arxiv.org/schemas/atom",
     }
-    root = ET.fromstring(resp.text)
+    try:
+        root = ET.fromstring(resp.text)
+    except ET.ParseError as e:
+        raise ArxivMetadataFetchError(
+            f"arXiv API returned invalid XML: {_exception_detail(e)}"
+        ) from e
     entry = root.find("atom:entry", ns)
     if entry is None:
         raise ValueError("Paper not found on arXiv")
@@ -671,8 +717,14 @@ async def import_arxiv_to_collection(
     try:
         meta = await _fetch_arxiv_metadata(arxiv_id)
     except Exception as e:
+        logger.exception(
+            "Failed to fetch arXiv metadata for arxiv_id=%s url=%s",
+            arxiv_id,
+            url,
+        )
         raise HTTPException(
-            status_code=400, detail=f"{_msg(lang, 'fetch_arxiv_failed')}: {e}"
+            status_code=400,
+            detail=f"{_msg(lang, 'fetch_arxiv_failed')}: {_exception_detail(e)}",
         )
 
     # Dedup: check if paper already exists using collection-scoped deduplication

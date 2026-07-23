@@ -9,6 +9,7 @@ from models import Paper, Collection, CollectionPaper
 from models.crawl_task import CrawlTask
 from models.user_setting import UserSetting
 from crawl.sources import get_source
+from services.collection_ids import slugify_collection_name
 from services.deduplication import find_duplicate_paper
 
 logger = logging.getLogger(__name__)
@@ -143,7 +144,7 @@ class CrawlExecutor:
             prefix = task.new_collection_prefix or task.name
             date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
             title = f"{prefix} - {date_str}"
-            slug = prefix.lower().replace(" ", "-")[:40]
+            slug = slugify_collection_name(prefix, max_length=40)
             cid = f"{slug}-{date_str}"
 
             # Ensure unique

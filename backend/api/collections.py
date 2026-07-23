@@ -23,6 +23,7 @@ from schemas import (
 from schemas.collection import StatsOut, UserBrief, GroupOut, SectionOut, PaperInGroup
 from services.permission_service import check_collection_permission
 from services.deduplication import normalize_title
+from services.collection_ids import is_safe_collection_id
 from import_module.bibtex_exporter import export_papers_to_bibtex
 
 router = APIRouter(prefix="/api/collections", tags=["collections"])
@@ -110,6 +111,15 @@ def create_collection(
     current_user: User = Depends(get_current_user),
 ):
     cid = data.id or f"col-{uuid.uuid4().hex[:8]}"
+    if not is_safe_collection_id(cid):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Collection ID must start with a letter or number and contain "
+                "only letters, numbers, dots, underscores, or hyphens "
+                "(maximum 128 characters)"
+            ),
+        )
     if db.query(Collection).filter(Collection.id == cid).first():
         raise HTTPException(status_code=400, detail="Collection ID already exists")
     c = Collection(

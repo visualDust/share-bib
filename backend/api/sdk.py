@@ -17,6 +17,7 @@ from auth.deps import get_current_user, get_user_from_api_key
 from database import get_db
 from import_module.bibtex_exporter import export_papers_to_bibtex
 from models import User, Collection, Paper, CollectionPaper, CollectionPermission
+from services.collection_ids import is_safe_collection_id
 from services.permission_service import check_collection_permission
 
 router = APIRouter(prefix="/api/sdk", tags=["sdk"])
@@ -295,6 +296,12 @@ def create_collection(
 ) -> CollectionOut:
     """Create a new collection."""
     collection_id = body.id or str(uuid.uuid4())
+    if not is_safe_collection_id(collection_id):
+        raise HTTPException(
+            400,
+            "Collection ID must start with a letter or number and contain only "
+            "letters, numbers, dots, underscores, or hyphens (maximum 128 characters)",
+        )
     if db.query(Collection).filter(Collection.id == collection_id).first():
         raise HTTPException(400, f"Collection ID '{collection_id}' already exists")
 
