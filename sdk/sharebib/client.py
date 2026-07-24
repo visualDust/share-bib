@@ -7,6 +7,7 @@ from typing import Any, Optional
 
 import requests
 
+from ._version import __version__
 from .config import ConfigManager, normalize_base_url, validate_api_key
 from .exceptions import ShareBibAPIError, ShareBibConfigError
 from .models import (
@@ -56,7 +57,7 @@ class ShareBibClient:
             {
                 "X-API-Key": self.api_key,
                 "Accept": "application/json",
-                "User-Agent": "sharebib-sdk/0.4.0",
+                "User-Agent": f"sharebib-sdk/{__version__}",
             }
         )
 

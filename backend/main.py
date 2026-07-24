@@ -17,7 +17,7 @@ from api.api_keys import router as api_keys_router
 from api.sdk import router as sdk_router
 from crawl.scheduler import scheduler
 
-app = FastAPI(title="Paper Collector", version="0.4.0")
+app = FastAPI(title="ShareBib", version="0.5.0")
 
 frontend_port = os.environ.get("FRONTEND_PORT", "11551")
 app.add_middleware(

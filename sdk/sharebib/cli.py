@@ -179,7 +179,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Operate ShareBib collections and papers from the command line.",
     )
-    parser.add_argument("--api-key", help="ShareBib API key (starts with pc_)")
+    parser.add_argument("--api-key", help="ShareBib API key (starts with sb_)")
     parser.add_argument(
         "--base-url",
         help="ShareBib base URL, e.g. https://papers.example.com",

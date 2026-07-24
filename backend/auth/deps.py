@@ -1,13 +1,13 @@
-from fastapi import Depends, HTTPException, status, Header
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 
-from auth.jwt_handler import decode_access_token
-from config import config
 from database import get_db
+from fastapi import Depends, Header, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from models import User
 from models.api_key import ApiKey
+from sqlalchemy.orm import Session
+
+from auth.jwt_handler import decode_access_token
 
 security = HTTPBearer()
 optional_security = HTTPBearer(auto_error=False)
@@ -36,11 +36,23 @@ async def get_current_user(
             detail="User not found or inactive",
         )
 
+    if payload.get("ver") != user.token_version:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token has been revoked",
+        )
+
     return user
 
 
 def get_admin_user(current_user: User = Depends(get_current_user)) -> User:
-    if current_user.username != config.admin_username:
+    """Require the database-backed administrator role.
+
+    Usernames are mutable profile data and must never be used as an
+    authorization principal. Legacy installations are migrated once during
+    database initialization (see ``database.init_db``).
+    """
+    if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Admin access required")
     return current_user
 
@@ -67,6 +79,8 @@ async def get_current_user_optional(
     user = db.query(User).filter(User.id == user_id).first()
     if user is None or not user.is_active:
         return None
+    if payload.get("ver") != user.token_version:
+        return None
 
     return user
 
@@ -87,13 +101,14 @@ async def get_user_from_api_key(
         )
 
     # Find API key by prefix (first 8 chars)
-    if not x_api_key.startswith("pc_") or len(x_api_key) < 11:
+    # Keep accepting pre-0.5 ``pc_`` keys while issuing branded ``sb_`` keys.
+    if not x_api_key.startswith(("sb_", "pc_")) or len(x_api_key) < 11:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid API key format",
         )
 
-    prefix = x_api_key[:11]  # "pc_" + first 8 chars of random part
+    prefix = x_api_key[:11]  # Prefix marker + first 8 chars of random part
     api_keys = db.query(ApiKey).filter(ApiKey.key_prefix == prefix).all()
 
     # Verify the full key against stored hashes

@@ -2,7 +2,8 @@
 
 # ShareBib - Startup Script
 
-SESSION_NAME="PACO"
+SESSION_NAME="sharebib"
+LEGACY_SESSION_NAME="PACO"
 DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
 # Load backend .env (ports and config)
@@ -22,6 +23,13 @@ ALLOWED_HOSTS=${ALLOWED_HOSTS:-}
 if tmux has-session -t $SESSION_NAME 2>/dev/null; then
     echo "Session '$SESSION_NAME' already exists. Attaching..."
     tmux attach-session -t $SESSION_NAME
+    exit 0
+fi
+
+if tmux has-session -t $LEGACY_SESSION_NAME 2>/dev/null; then
+    echo "Legacy session '$LEGACY_SESSION_NAME' is still running. Attaching to it..."
+    echo "Run ./scripts/stop.sh before restarting under the new '$SESSION_NAME' name."
+    tmux attach-session -t $LEGACY_SESSION_NAME
     exit 0
 fi
 

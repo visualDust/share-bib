@@ -1,4 +1,4 @@
-# PACO - Configuration File (optional)
+# ShareBib - Configuration File (optional)
 #
 # This file is optional. All settings can be configured via environment variables.
 # If this file exists at data/config.yaml, it will be loaded, but env vars take priority.

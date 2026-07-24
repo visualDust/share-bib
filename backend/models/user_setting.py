@@ -1,10 +1,9 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import String, DateTime, UniqueConstraint
-from sqlalchemy.orm import Mapped, mapped_column
-
 from database import Base
+from sqlalchemy import DateTime, ForeignKey, String, UniqueConstraint
+from sqlalchemy.orm import Mapped, mapped_column
 
 
 class UserSetting(Base):
@@ -18,7 +17,12 @@ class UserSetting(Base):
     id: Mapped[str] = mapped_column(
         String, primary_key=True, default=lambda: str(uuid.uuid4())
     )
-    user_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     key: Mapped[str] = mapped_column(String, nullable=False)
     value: Mapped[str] = mapped_column(String, nullable=False, default="")
     created_at: Mapped[datetime] = mapped_column(

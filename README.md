@@ -23,6 +23,10 @@ Your labmate opens the link you shared → exports the `.bib` → imports it int
     <td><img src="docs/images/duplicate.png" alt="Duplicate management" width="400"></td>
     <td><img src="docs/images/access.png" alt="Manage access" width="400"></td>
   </tr>
+  <tr>
+    <td align="center"><img src="docs/images/mobile-compact.png" alt="Compact paper list on mobile" width="220"></td>
+    <td><img src="sdk/api-key-screenshot.png" alt="SDK API key settings" width="400"></td>
+  </tr>
 </table>
 
 ## Features
@@ -30,11 +34,12 @@ Your labmate opens the link you shared → exports the `.bib` → imports it int
 - Self-hosted, local login or OAuth
 - Import and export `.bib` files (works with Zotero, etc.)
 - Scheduled crawl tasks: auto-fetch new papers from arXiv RSS with keyword filtering (`+required`, `-excluded`, `*wildcard`)
-- Duplication detection and merging
-- Organize papers into collections with per-user access control
+- Duplicate detection with side-by-side review and collection-scoped updates
+- Organize papers into private, shared, or public collections with owner-controlled access
 - Python SDK, `sharebib` CLI, and agent skill support for programmatic paper-management workflows
-- i18n support (English, 中文)
-- Desktop and mobile page layout
+- Comfortable and compact paper-list layouts with saved preferences
+- Light and dark themes; browser-language, English, and 中文 preferences
+- Responsive desktop and mobile layouts
 
 **Tested authentication methods:**
 
@@ -75,14 +80,14 @@ pip install sharebib
 1. Log in to your ShareBib instance.
 2. Go to **Settings**.
 3. In **SDK API Keys**, click **Create API Key**.
-4. Copy the generated key (starts with `pc_`).
+4. Copy the generated key (starts with `sb_`; existing `pc_` keys remain valid).
 
 ### 2. Configure Authentication
 
 Set environment variables:
 
 ```bash
-export SHAREBIB_API_KEY="pc_xxxxxxxxxxxxxxxxxxxxxxxxx"
+export SHAREBIB_API_KEY="sb_xxxxxxxxxxxxxxxxxxxxxxxxx"
 export SHAREBIB_BASE_URL="https://papers.example.com"
 export SHAREBIB_TIMEOUT="30"
 ```
@@ -91,7 +96,7 @@ Or create `.sharebib/config.json`:
 
 ```json
 {
-  "api_key": "pc_xxxxxxxxxxxxxxxxxxxxxxxxx",
+  "api_key": "sb_xxxxxxxxxxxxxxxxxxxxxxxxx",
   "base_url": "https://papers.example.com",
   "timeout": 30
 }
@@ -285,7 +290,7 @@ from sharebib import ShareBibClient
 # Initialize with your API key (get it from Settings page)
 client = ShareBibClient(
     base_url="http://localhost:11550",
-    api_key="pc_your_api_key_here"
+    api_key="sb_your_api_key_here"
 )
 
 # Create a collection

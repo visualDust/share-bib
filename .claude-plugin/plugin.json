@@ -1,6 +1,6 @@
 {
   "name": "sharebib",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Operate ShareBib collections and papers - create collections, search users, manage sharing, export BibTeX, and verify SDK API keys",
   "author": {
     "name": "VisualDust",

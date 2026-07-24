@@ -2,10 +2,9 @@ import secrets
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import String, DateTime, Boolean
-from sqlalchemy.orm import Mapped, mapped_column
-
 from database import Base
+from sqlalchemy import Boolean, DateTime, ForeignKey, String
+from sqlalchemy.orm import Mapped, mapped_column
 
 
 class ApiKey(Base):
@@ -16,7 +15,12 @@ class ApiKey(Base):
     id: Mapped[str] = mapped_column(
         String, primary_key=True, default=lambda: str(uuid.uuid4())
     )
-    user_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     name: Mapped[str] = mapped_column(String, nullable=False)  # User-friendly name
     key_hash: Mapped[str] = mapped_column(
         String, nullable=False, unique=True, index=True
@@ -37,8 +41,8 @@ class ApiKey(Base):
 
     @staticmethod
     def generate_key() -> str:
-        """Generate a new API key with format: pc_<32 random chars>"""
-        return f"pc_{secrets.token_urlsafe(32)}"
+        """Generate a new ShareBib API key with format: sb_<32 random chars>."""
+        return f"sb_{secrets.token_urlsafe(32)}"
 
     @staticmethod
     def hash_key(key: str) -> str:

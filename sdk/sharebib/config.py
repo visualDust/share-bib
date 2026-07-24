@@ -137,9 +137,10 @@ class ConfigManager:
 
 def validate_api_key(api_key: str) -> None:
     """Validate ShareBib API key format."""
-    if not api_key.startswith("pc_"):
+    if not api_key.startswith(("sb_", "pc_")):
         raise ShareBibConfigError(
-            "Invalid API key format. API keys should start with 'pc_'"
+            "Invalid API key format. ShareBib keys start with 'sb_' "
+            "(legacy 'pc_' keys are also supported)"
         )
 
 

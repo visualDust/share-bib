@@ -41,7 +41,7 @@ Supported configuration sources, highest priority first:
 Environment variables:
 
 ```bash
-export SHAREBIB_API_KEY="pc_xxxxxxxxxxxxxxxxxxxxxxxxx"
+export SHAREBIB_API_KEY="sb_xxxxxxxxxxxxxxxxxxxxxxxxx"
 export SHAREBIB_BASE_URL="https://papers.example.com"
 export SHAREBIB_TIMEOUT="30"
 ```

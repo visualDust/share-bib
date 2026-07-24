@@ -1,6 +1,6 @@
 {
   "app": {
-    "title": "Paper Collector"
+    "title": "ShareBib"
   },
   "nav": {
     "collections": "集合",
@@ -98,6 +98,9 @@
     "filter": "筛选",
     "noPapers": "暂无论文",
     "paperList": "论文列表 ({{count}})",
+    "layout": "论文布局",
+    "comfortableView": "宽松视图",
+    "compactView": "紧凑视图",
     "back": "返回",
     "login": "登录",
     "loginHint": "你正在查看一个公开集合。登录后可以编辑或创建自己的集合。",

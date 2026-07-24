@@ -1,6 +1,6 @@
 {
   "app": {
-    "title": "Paper Collector"
+    "title": "ShareBib"
   },
   "nav": {
     "collections": "Collections",
@@ -98,6 +98,9 @@
     "filter": "Filter",
     "noPapers": "No papers",
     "paperList": "Papers ({{count}})",
+    "layout": "Paper layout",
+    "comfortableView": "Comfortable view",
+    "compactView": "Compact view",
     "back": "Back",
     "login": "Login",
     "loginHint": "You are viewing a public collection. Login to edit or create your own collections.",

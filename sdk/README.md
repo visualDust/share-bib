@@ -34,7 +34,7 @@ pip install -e .
 1. Log in to your ShareBib instance
 2. Go to **Settings**
 3. In **SDK API Keys**, click **Create API Key**
-4. Copy the generated key (starts with `pc_`)
+4. Copy the generated key (starts with `sb_`; existing `pc_` keys remain valid)
 
 ![API Key Management](https://raw.githubusercontent.com/visualdust/sharebib/main/sdk/api-key-screenshot.png)
 
@@ -50,7 +50,7 @@ Supported configuration sources, highest priority first:
 ### Environment variables
 
 ```bash
-export SHAREBIB_API_KEY="pc_your_api_key_here"
+export SHAREBIB_API_KEY="sb_your_api_key_here"
 export SHAREBIB_BASE_URL="http://localhost:11550"
 export SHAREBIB_TIMEOUT="30"
 ```
@@ -61,7 +61,7 @@ export SHAREBIB_TIMEOUT="30"
 
 ```json
 {
-  "api_key": "pc_your_api_key_here",
+  "api_key": "sb_your_api_key_here",
   "base_url": "http://localhost:11550",
   "timeout": 30
 }
@@ -163,7 +163,7 @@ from sharebib import ShareBibClient
 
 client = ShareBibClient(
     base_url="http://localhost:11550",
-    api_key="pc_your_api_key_here",
+    api_key="sb_your_api_key_here",
 )
 
 me = client.get_current_user()
@@ -237,7 +237,7 @@ print(bibtex[:120])
 ```python
 from sharebib import ShareBibAPIError, ShareBibClient
 
-client = ShareBibClient("http://localhost:11550", "pc_your_api_key_here")
+client = ShareBibClient("http://localhost:11550", "sb_your_api_key_here")
 
 try:
     client.get_collection("nonexistent-id")

@@ -1,5 +1,4 @@
 import pytest
-
 from services.collection_ids import is_safe_collection_id, slugify_collection_name
 
 

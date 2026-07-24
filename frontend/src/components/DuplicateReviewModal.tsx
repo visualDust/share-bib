@@ -158,7 +158,11 @@ export default function DuplicateReviewModal({
       okText={t("duplicateReview.confirm")}
       cancelText={t("duplicateReview.cancel")}
       className="dedup-modal"
-      width={window.innerWidth < 768 ? "100vw" : 900}
+      width={
+        window.innerWidth < 768
+          ? "100vw"
+          : Math.min(1160, window.innerWidth - 48)
+      }
       fullScreen={window.innerWidth < 768}
       style={{ maxHeight: window.innerWidth < 768 ? undefined : "85vh" }}
       maskClosable={false}

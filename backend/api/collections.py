@@ -1,30 +1,30 @@
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fastapi.responses import Response
-from sqlalchemy.orm import Session
-
 from auth.deps import get_current_user, get_current_user_optional
 from database import get_db
-from models import User, Collection, Paper, CollectionPaper, CollectionPermission
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import Response
+from import_module.bibtex_exporter import export_papers_to_bibtex
+from models import Collection, CollectionPaper, CollectionPermission, Paper, User
 from schemas import (
     CollectionCreate,
-    CollectionUpdate,
-    CollectionOut,
     CollectionListOut,
-    CollectionVisibilityUpdate,
-    PermissionCreate,
-    PermissionOut,
+    CollectionOut,
     CollectionPaperAdd,
     CollectionPaperUpdate,
+    CollectionUpdate,
+    CollectionVisibilityUpdate,
     PaperReorder,
+    PermissionCreate,
+    PermissionOut,
 )
-from schemas.collection import StatsOut, UserBrief, GroupOut, SectionOut, PaperInGroup
-from services.permission_service import check_collection_permission
-from services.deduplication import normalize_title
+from schemas.collection import GroupOut, PaperInGroup, SectionOut, StatsOut, UserBrief
 from services.collection_ids import is_safe_collection_id
-from import_module.bibtex_exporter import export_papers_to_bibtex
+from services.deduplication import normalize_title
+from services.paper_service import check_paper_permission
+from services.permission_service import check_collection_permission
+from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/api/collections", tags=["collections"])
 
@@ -69,7 +69,10 @@ def list_collections(
     own = db.query(Collection).filter(Collection.created_by == current_user.id)
     shared_ids = (
         db.query(CollectionPermission.collection_id)
-        .filter(CollectionPermission.user_id == current_user.id)
+        .filter(
+            CollectionPermission.user_id == current_user.id,
+            CollectionPermission.permission.in_(["view", "edit"]),
+        )
         .subquery()
     )
     shared = db.query(Collection).filter(Collection.id.in_(shared_ids))
@@ -167,23 +170,26 @@ def get_collection(
         raise HTTPException(status_code=404, detail="Collection not found")
 
     creator = db.query(User).filter(User.id == c.created_by).first()
-    perms = (
-        db.query(CollectionPermission)
-        .filter(CollectionPermission.collection_id == collection_id)
-        .all()
-    )
     perm_out = []
-    for p in perms:
-        u = db.query(User).filter(User.id == p.user_id).first()
-        perm_out.append(
-            PermissionOut(
-                user_id=p.user_id,
-                username=u.username if u else "unknown",
-                display_name=u.display_name if u else None,
-                permission=p.permission,
-                granted_at=p.granted_at,
-            )
+    # Collaborator identities are management data, not collection content.
+    # Only the creator receives them here; other clients use an empty list.
+    if user_id == c.created_by:
+        perms = (
+            db.query(CollectionPermission)
+            .filter(CollectionPermission.collection_id == collection_id)
+            .all()
         )
+        for p in perms:
+            u = db.query(User).filter(User.id == p.user_id).first()
+            perm_out.append(
+                PermissionOut(
+                    user_id=p.user_id,
+                    username=u.username if u else "unknown",
+                    display_name=u.display_name if u else None,
+                    permission=p.permission,
+                    granted_at=p.granted_at,
+                )
+            )
 
     # Build groups
     cps = (
@@ -241,16 +247,18 @@ def get_collection(
             current_user_permission = "view"
         else:
             # Check explicit permissions
-            perm = (
+            perms = (
                 db.query(CollectionPermission)
                 .filter(
                     CollectionPermission.collection_id == collection_id,
                     CollectionPermission.user_id == user_id,
                 )
-                .first()
+                .all()
             )
-            if perm:
-                current_user_permission = perm.permission
+            if any(p.permission == "edit" for p in perms):
+                current_user_permission = "edit"
+            elif any(p.permission == "view" for p in perms):
+                current_user_permission = "view"
 
     return CollectionOut(
         id=c.id,
@@ -285,7 +293,13 @@ def update_collection(
     c = db.query(Collection).filter(Collection.id == collection_id).first()
     if not c:
         raise HTTPException(status_code=404, detail="Collection not found")
-    for field, value in data.model_dump(exclude_unset=True).items():
+    update_data = data.model_dump(exclude_unset=True)
+    if "allow_export" in update_data and c.created_by != current_user.id:
+        raise HTTPException(
+            status_code=403,
+            detail="Only the creator can change the export policy",
+        )
+    for field, value in update_data.items():
         setattr(c, field, value)
     c.updated_at = datetime.now(timezone.utc)
     db.commit()
@@ -358,6 +372,7 @@ def add_paper_to_collection(
         raise HTTPException(status_code=404, detail="Collection not found")
 
     paper_id = data.paper_id
+    created_inline = False
     if data.paper and not paper_id:
         p = Paper(
             title=data.paper.title,
@@ -378,11 +393,20 @@ def add_paper_to_collection(
         db.add(p)
         db.flush()
         paper_id = p.id
+        created_inline = True
 
     if not paper_id:
         raise HTTPException(
             status_code=400, detail="Must provide paper_id or paper data"
         )
+
+    paper = db.query(Paper).filter(Paper.id == paper_id).first()
+    if not paper:
+        raise HTTPException(status_code=404, detail="Paper not found")
+    if not created_inline and not check_paper_permission(
+        db, current_user.id, paper_id, "view"
+    ):
+        raise HTTPException(status_code=404, detail="Paper not found")
 
     existing = (
         db.query(CollectionPaper)
@@ -534,17 +558,32 @@ def add_permission(
         raise HTTPException(
             status_code=403, detail="Only the creator can manage permissions"
         )
+    target_user = (
+        db.query(User).filter(User.id == data.user_id, User.is_active.is_(True)).first()
+    )
+    if not target_user:
+        raise HTTPException(status_code=404, detail="Active user not found")
+    if target_user.id == current_user.id:
+        raise HTTPException(status_code=400, detail="Creator already has full access")
+
+    # A user has exactly one role per collection. Replace legacy duplicate rows
+    # as well as the normal existing row before writing the new role.
+    db.query(CollectionPermission).filter(
+        CollectionPermission.collection_id == collection_id,
+        CollectionPermission.user_id == data.user_id,
+    ).delete(synchronize_session=False)
     perm = CollectionPermission(
-        collection_id=collection_id, user_id=data.user_id, permission=data.permission
+        collection_id=collection_id,
+        user_id=data.user_id,
+        permission=data.permission,
     )
     db.add(perm)
     db.commit()
     db.refresh(perm)
-    u = db.query(User).filter(User.id == data.user_id).first()
     return PermissionOut(
         user_id=perm.user_id,
-        username=u.username if u else "unknown",
-        display_name=u.display_name if u else None,
+        username=target_user.username,
+        display_name=target_user.display_name,
         permission=perm.permission,
         granted_at=perm.granted_at,
     )
@@ -564,17 +603,11 @@ def remove_permission(
         raise HTTPException(
             status_code=403, detail="Only the creator can manage permissions"
         )
-    perm = (
-        db.query(CollectionPermission)
-        .filter(
-            CollectionPermission.collection_id == collection_id,
-            CollectionPermission.user_id == user_id,
-        )
-        .first()
-    )
-    if perm:
-        db.delete(perm)
-        db.commit()
+    db.query(CollectionPermission).filter(
+        CollectionPermission.collection_id == collection_id,
+        CollectionPermission.user_id == user_id,
+    ).delete(synchronize_session=False)
+    db.commit()
 
 
 # --- Export ---

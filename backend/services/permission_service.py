@@ -1,6 +1,5 @@
-from sqlalchemy.orm import Session
-
 from models import Collection, CollectionPermission
+from sqlalchemy.orm import Session
 
 
 def check_collection_permission(
@@ -20,6 +19,9 @@ def check_collection_permission(
     Returns:
         True if the user has the required permission
     """
+    if required_permission not in ("view", "edit"):
+        return False
+
     collection = db.query(Collection).filter(Collection.id == collection_id).first()
     if not collection:
         return False
@@ -39,7 +41,7 @@ def check_collection_permission(
         return True
     if collection.visibility == "public_editable":
         # Authenticated users can view and edit public_editable collections
-        return True
+        return required_permission in ("view", "edit")
 
     # Check explicit permissions (for private/shared collections, or to override defaults)
     perms = (

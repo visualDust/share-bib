@@ -15,7 +15,7 @@ from sharebib import ShareBibClient
 
 # Configuration
 BASE_URL = "http://localhost:11550"  # Change this to your ShareBib instance URL
-API_KEY = "pc_your_api_key_here"  # Replace with your actual API key
+API_KEY = "sb_your_api_key_here"  # Replace with your actual API key
 
 
 def main():
@@ -37,7 +37,7 @@ def main():
     print("\n[2/7] Creating a new collection...")
     collection = client.create_collection(
         title="SDK Demo Collection",
-        description="Comprehensive demo of Paper Collector SDK features",
+        description="Comprehensive demo of ShareBib SDK features",
         visibility="private",  # Options: "private", "public", "public_editable"
         tags=["demo", "sdk", "example"],
     )

@@ -1,18 +1,19 @@
 import asyncio
 import logging
 from datetime import datetime, timezone
-
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
-from sqlalchemy.orm import Session
+from typing import Literal
 
 from auth.deps import get_current_user
+from crawl.scheduler import compute_next_run, scheduler
+from crawl.sources import get_source, list_sources
 from database import get_db
-from models import User, Collection
+from fastapi import APIRouter, Depends, HTTPException
+from models import Collection, User
 from models.crawl_task import CrawlTask
 from models.crawl_task_run import CrawlTaskRun
-from crawl.sources import get_source, list_sources
-from crawl.scheduler import scheduler, compute_next_run
+from pydantic import BaseModel
+from services.permission_service import check_collection_permission
+from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/api/crawl-tasks", tags=["crawl-tasks"])
 logger = logging.getLogger(__name__)
@@ -25,23 +26,52 @@ class CrawlTaskCreate(BaseModel):
     name: str
     source_type: str
     source_config: dict
-    schedule_type: str = "daily"
+    schedule_type: Literal["once", "daily", "weekly", "monthly"] = "daily"
     time_range: str = "1d"
-    target_mode: str = "append"
+    target_mode: Literal["append", "create_new"] = "append"
     target_collection_id: str | None = None
     new_collection_prefix: str | None = None
-    duplicate_strategy: str = "skip"
+    duplicate_strategy: Literal["skip", "update"] = "skip"
 
 
 class CrawlTaskUpdate(BaseModel):
     name: str | None = None
     source_config: dict | None = None
-    schedule_type: str | None = None
+    schedule_type: Literal["once", "daily", "weekly", "monthly"] | None = None
     time_range: str | None = None
-    target_mode: str | None = None
+    target_mode: Literal["append", "create_new"] | None = None
     target_collection_id: str | None = None
     new_collection_prefix: str | None = None
-    duplicate_strategy: str | None = None
+    duplicate_strategy: Literal["skip", "update"] | None = None
+
+
+def _require_target_access(
+    db: Session,
+    user_id: str,
+    target_mode: str,
+    target_collection_id: str | None,
+    new_collection_prefix: str | None,
+) -> None:
+    """Validate a task's complete target configuration and authorization."""
+    if target_mode == "append":
+        if not target_collection_id:
+            raise HTTPException(
+                status_code=400, detail="target_collection_id required for append mode"
+            )
+        collection = (
+            db.query(Collection).filter(Collection.id == target_collection_id).first()
+        )
+        if not collection:
+            raise HTTPException(status_code=404, detail="Target collection not found")
+        if not check_collection_permission(db, user_id, collection.id, "edit"):
+            raise HTTPException(
+                status_code=403, detail="No permission to edit target collection"
+            )
+    elif not new_collection_prefix:
+        raise HTTPException(
+            status_code=400,
+            detail="new_collection_prefix required for create_new mode",
+        )
 
 
 def _task_to_dict(task: CrawlTask) -> dict:
@@ -105,25 +135,13 @@ def create_crawl_task(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    # Validate target
-    if body.target_mode == "append":
-        if not body.target_collection_id:
-            raise HTTPException(
-                status_code=400, detail="target_collection_id required for append mode"
-            )
-        collection = (
-            db.query(Collection)
-            .filter(Collection.id == body.target_collection_id)
-            .first()
-        )
-        if not collection:
-            raise HTTPException(status_code=404, detail="Target collection not found")
-    elif body.target_mode == "create_new":
-        if not body.new_collection_prefix:
-            raise HTTPException(
-                status_code=400,
-                detail="new_collection_prefix required for create_new mode",
-            )
+    _require_target_access(
+        db,
+        current_user.id,
+        body.target_mode,
+        body.target_collection_id,
+        body.new_collection_prefix,
+    )
 
     now = datetime.now(timezone.utc)
     task = CrawlTask(
@@ -189,17 +207,13 @@ def update_crawl_task(
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
 
-    # Validate target if changed
-    if update_data.get("target_mode") == "append" or (
-        "target_collection_id" in update_data and task.target_mode == "append"
-    ):
-        cid = update_data.get("target_collection_id", task.target_collection_id)
-        if cid:
-            collection = db.query(Collection).filter(Collection.id == cid).first()
-            if not collection:
-                raise HTTPException(
-                    status_code=404, detail="Target collection not found"
-                )
+    _require_target_access(
+        db,
+        current_user.id,
+        update_data.get("target_mode", task.target_mode),
+        update_data.get("target_collection_id", task.target_collection_id),
+        update_data.get("new_collection_prefix", task.new_collection_prefix),
+    )
 
     for key, value in update_data.items():
         setattr(task, key, value)
@@ -248,6 +262,13 @@ def enable_crawl_task(
     )
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
+    _require_target_access(
+        db,
+        current_user.id,
+        task.target_mode,
+        task.target_collection_id,
+        task.new_collection_prefix,
+    )
     task.is_enabled = True
     now = datetime.now(timezone.utc)
     if task.schedule_type == "once":
@@ -292,6 +313,14 @@ async def run_crawl_task_now(
     )
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
+
+    _require_target_access(
+        db,
+        current_user.id,
+        task.target_mode,
+        task.target_collection_id,
+        task.new_collection_prefix,
+    )
 
     # Reentrancy guard: reject duplicate trigger while task is running
     if scheduler.is_task_running(task_id):

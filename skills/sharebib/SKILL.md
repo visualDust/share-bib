@@ -59,7 +59,7 @@ After running commands:
   ```bash
   pip install "git+https://github.com/visualdust/sharebib.git#subdirectory=sdk"
   ```
-- API key format: `pc_...`
+- API key format: `sb_...` (`pc_...` is the legacy format and remains valid)
 - Preferred CLI command: `sharebib`
 - Compatibility alias: `sharebib-cli`
 
@@ -100,7 +100,7 @@ http://localhost:11550/api
 ### Environment Variables
 
 ```bash
-export SHAREBIB_API_KEY="pc_xxxxxxxxxxxxxxxxxxxxxxxxx"
+export SHAREBIB_API_KEY="sb_xxxxxxxxxxxxxxxxxxxxxxxxx"
 export SHAREBIB_BASE_URL="https://papers.example.com"
 export SHAREBIB_TIMEOUT="30"
 ```
@@ -109,7 +109,7 @@ export SHAREBIB_TIMEOUT="30"
 
 ```json
 {
-  "api_key": "pc_xxxxxxxxxxxxxxxxxxxxxxxxx",
+  "api_key": "sb_xxxxxxxxxxxxxxxxxxxxxxxxx",
   "base_url": "https://papers.example.com",
   "timeout": 30
 }
@@ -166,7 +166,7 @@ sharebib papers remove --collection-id "collection-id" --id "paper-id"
 
 ### 401 Unauthorized
 
-- Check that the API key starts with `pc_`
+- Check that the API key starts with `sb_` (or legacy `pc_`)
 - Verify the key is still active in ShareBib settings
 - Confirm you are pointing at the correct ShareBib instance
 

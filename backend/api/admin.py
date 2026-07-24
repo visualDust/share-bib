@@ -1,17 +1,26 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
-
 from auth.deps import get_admin_user
 from auth.simple import get_password_hash
 from database import get_db
-from models import User, Collection, CollectionPermission, UserPaperMeta, ImportTask
+from fastapi import APIRouter, Depends, HTTPException, Query
+from models import (
+    ApiKey,
+    Collection,
+    CollectionPermission,
+    CrawlTask,
+    CrawlTaskRun,
+    ImportTask,
+    User,
+    UserPaperMeta,
+    UserSetting,
+)
 from schemas.user import (
-    AdminUserCreate,
-    AdminPasswordReset,
-    AdminUserOut,
     AdminDeleteUser,
+    AdminPasswordReset,
+    AdminUserCreate,
+    AdminUserOut,
     AdminUserUpdate,
 )
+from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -160,6 +169,7 @@ def reset_password(
         raise HTTPException(status_code=404, detail="User not found")
 
     user.password_hash = get_password_hash(body.new_password)
+    user.token_version += 1
     db.commit()
     return {"detail": "Password reset successfully"}
 
@@ -177,6 +187,7 @@ def toggle_active(
         raise HTTPException(status_code=400, detail="Cannot disable yourself")
 
     user.is_active = not user.is_active
+    user.token_version += 1
     db.commit()
     return {
         "detail": f"User {'enabled' if user.is_active else 'disabled'}",
@@ -211,7 +222,7 @@ def delete_user(
             {"created_by": target.id}
         )
         existing = {
-            (p.collection_id, p.permission)
+            p.collection_id: p
             for p in db.query(CollectionPermission)
             .filter(CollectionPermission.user_id == target.id)
             .all()
@@ -221,14 +232,64 @@ def delete_user(
             .filter(CollectionPermission.user_id == user.id)
             .all()
         ):
-            if (perm.collection_id, perm.permission) in existing:
+            target_owns_collection = (
+                db.query(Collection.id)
+                .filter(
+                    Collection.id == perm.collection_id,
+                    Collection.created_by == target.id,
+                )
+                .first()
+                is not None
+            )
+            if target_owns_collection:
+                db.delete(perm)
+                continue
+            target_perm = existing.get(perm.collection_id)
+            if target_perm:
+                if perm.permission == "edit" and target_perm.permission != "edit":
+                    target_perm.permission = "edit"
                 db.delete(perm)
             else:
                 perm.user_id = target.id
+                existing[perm.collection_id] = perm
         db.query(ImportTask).filter(ImportTask.user_id == user.id).update(
             {"user_id": target.id}
         )
+        db.query(CrawlTask).filter(CrawlTask.user_id == user.id).update(
+            {"user_id": target.id}
+        )
     else:
+        owned_collection_ids = [
+            collection_id
+            for (collection_id,) in db.query(Collection.id)
+            .filter(Collection.created_by == user.id)
+            .all()
+        ]
+        owned_task_ids = [
+            task_id
+            for (task_id,) in db.query(CrawlTask.id)
+            .filter(CrawlTask.user_id == user.id)
+            .all()
+        ]
+        if owned_task_ids:
+            db.query(CrawlTaskRun).filter(
+                CrawlTaskRun.task_id.in_(owned_task_ids)
+            ).delete(synchronize_session=False)
+        db.query(CrawlTask).filter(CrawlTask.user_id == user.id).delete(
+            synchronize_session=False
+        )
+        if owned_collection_ids:
+            db.query(CrawlTask).filter(
+                CrawlTask.target_collection_id.in_(owned_collection_ids)
+            ).update(
+                {
+                    "is_enabled": False,
+                    "target_collection_id": None,
+                    "last_run_status": "failed",
+                    "last_run_result": {"error": "target_collection_deleted"},
+                },
+                synchronize_session=False,
+            )
         db.query(CollectionPermission).filter(
             CollectionPermission.user_id == user.id
         ).delete()
@@ -237,6 +298,9 @@ def delete_user(
             db.delete(col)
 
     db.query(UserPaperMeta).filter(UserPaperMeta.user_id == user.id).delete()
+    # Credentials and private source settings are revoked, never transferred.
+    db.query(ApiKey).filter(ApiKey.user_id == user.id).delete()
+    db.query(UserSetting).filter(UserSetting.user_id == user.id).delete()
     db.delete(user)
     db.commit()
 

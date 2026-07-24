@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title id="title">ShareBib</title>
+  <rect x="2" y="2" width="60" height="60" rx="14" fill="#176b52"/>
+  <path d="M11 17.5c8.1-2.6 15.1-.9 21 4.8v29.2c-5.9-5.2-12.9-6.7-21-4.2V17.5Z" fill="#f7f4ec"/>
+  <path d="M53 17.5c-8.1-2.6-15.1-.9-21 4.8v29.2c5.9-5.2 12.9-6.7 21-4.2V17.5Z" fill="#fffdf8"/>
+  <path d="M32 22.3v29.2" fill="none" stroke="#d6e7df" stroke-width="2"/>
+  <path d="M17 25.5c3.9-.6 7.2.1 10 2.2M17 32c3.9-.6 7.2.1 10 2.2M47 25.5c-3.9-.6-7.2.1-10 2.2M47 32c-3.9-.6-7.2.1-10 2.2" fill="none" stroke="#176b52" stroke-width="2.4" stroke-linecap="round"/>
+</svg>

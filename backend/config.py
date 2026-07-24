@@ -91,6 +91,7 @@ def load_config() -> AppConfig:
     # 2. If config.yaml exists, overlay its values
     config_path = _get_config_path()
     if config_path.exists():
+        os.chmod(config_path, 0o600)
         with open(config_path) as f:
             data = yaml.safe_load(f) or {}
         cfg = AppConfig(**data)
@@ -145,6 +146,7 @@ def _persist_jwt_secret(secret: str):
 
     with open(config_path, "w") as f:
         yaml.dump(data, f, default_flow_style=False, allow_unicode=True)
+    os.chmod(config_path, 0o600)
 
 
 config = load_config()

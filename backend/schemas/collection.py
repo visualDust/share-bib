@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel
 
@@ -9,7 +10,7 @@ class CollectionCreate(BaseModel):
     id: str | None = None
     title: str
     description: str | None = None
-    visibility: str = "private"
+    visibility: Literal["private", "shared", "public", "public_editable"] = "private"
     task_type: str = "manual_list"
     task_source: str | None = None
     task_source_display: str | None = None
@@ -26,7 +27,7 @@ class CollectionUpdate(BaseModel):
 
 
 class CollectionVisibilityUpdate(BaseModel):
-    visibility: str  # private, shared, public
+    visibility: Literal["private", "shared", "public", "public_editable"]
 
 
 class StatsOut(BaseModel):
@@ -104,7 +105,7 @@ class CollectionOut(BaseModel):
 
 class PermissionCreate(BaseModel):
     user_id: str
-    permission: str  # view or edit
+    permission: Literal["view", "edit"]
 
 
 class CollectionPaperAdd(BaseModel):

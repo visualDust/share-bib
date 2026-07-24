@@ -1,37 +1,41 @@
-import uuid
-import re
 import json
 import logging
+import re
+import uuid
 import xml.etree.ElementTree as ET
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 
 import httpx
+from auth.deps import get_current_user
+from database import SessionLocal, get_db
 from fastapi import (
     APIRouter,
-    Depends,
-    HTTPException,
-    UploadFile,
-    File,
-    Form,
     BackgroundTasks,
     Body,
+    Depends,
+    File,
+    Form,
+    HTTPException,
     Request,
+    UploadFile,
 )
-from sqlalchemy import func
-from sqlalchemy.orm import Session
-
-from auth.deps import get_current_user
-from database import get_db, SessionLocal
-from models import User, Paper, Collection, CollectionPaper, ImportTask
 from import_module.bibtex_parser import parse_bibtex_content
+from models import Collection, CollectionPaper, ImportTask, Paper, User
 from services.collection_ids import slugify_collection_name
 from services.deduplication import find_duplicate_paper
+from services.paper_service import update_paper_for_collection
+from services.permission_service import check_collection_permission
+from sqlalchemy import func
+from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/api/import", tags=["import"])
 logger = logging.getLogger(__name__)
 
 # In-memory cache for scan results (expires after 30 minutes)
 _scan_cache: dict[str, dict] = {}
+_MAX_SCAN_CACHE_ENTRIES = 100
+_MAX_BIBTEX_BYTES = 10 * 1024 * 1024
+_DUPLICATE_STRATEGIES = {"keep_existing", "use_new", "manual"}
 
 # Simple backend i18n for import-related strings
 _MESSAGES = {
@@ -96,6 +100,79 @@ def _cleanup_expired_scans():
         del _scan_cache[k]
 
 
+def _get_user_scan(scan_id: str, user_id: str) -> dict:
+    """Return a live scan owned by the current user without leaking its existence."""
+    _cleanup_expired_scans()
+    scan = _scan_cache.get(scan_id)
+    if not scan or scan.get("user_id") != user_id:
+        raise HTTPException(status_code=404, detail="Scan expired or not found")
+    return scan
+
+
+def _validate_duplicate_options(
+    duplicate_strategy: str,
+    duplicate_decisions: str | None,
+) -> dict[str, str] | None:
+    if duplicate_strategy not in _DUPLICATE_STRATEGIES:
+        raise HTTPException(status_code=422, detail="Invalid duplicate strategy")
+    if not duplicate_decisions:
+        return None
+    try:
+        decisions = json.loads(duplicate_decisions)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(
+            status_code=422, detail="Invalid duplicate decisions JSON"
+        ) from exc
+    if not isinstance(decisions, dict) or any(
+        not isinstance(key, str) or value not in {"skip", "keep_existing", "use_new"}
+        for key, value in decisions.items()
+    ):
+        raise HTTPException(status_code=422, detail="Invalid duplicate decisions")
+    return decisions
+
+
+def _require_append_import_authorization(
+    db: Session, task_id: str, user_id: str, collection_id: str
+) -> tuple[ImportTask, Collection, User]:
+    """Reload and validate all principals used by an append import."""
+    task = db.query(ImportTask).filter(ImportTask.id == task_id).first()
+    collection = db.query(Collection).filter(Collection.id == collection_id).first()
+    user = db.query(User).filter(User.id == user_id, User.is_active.is_(True)).first()
+    if not task or task.user_id != user_id or not user:
+        raise ValueError("Import task owner no longer exists or is inactive")
+    if not collection:
+        raise ValueError(f"Collection {collection_id} not found")
+    if not check_collection_permission(db, user_id, collection_id, "edit"):
+        raise ValueError("Import task owner can no longer edit the collection")
+    return task, collection, user
+
+
+def _mark_import_failed(db: Session, task_id: str, error: Exception) -> None:
+    """Record failure only after returning the session to a clean transaction."""
+    db.rollback()
+    task = db.query(ImportTask).filter(ImportTask.id == task_id).first()
+    if not task:
+        return
+    task.status = "failed"
+    task.result = {"error": _exception_detail(error)}
+    task.completed_at = datetime.now(timezone.utc)
+    db.commit()
+
+
+async def _read_bibtex(file: UploadFile) -> str:
+    if not file.filename or not file.filename.lower().endswith(".bib"):
+        raise HTTPException(status_code=400, detail="Only .bib files are accepted")
+    content = await file.read(_MAX_BIBTEX_BYTES + 1)
+    if len(content) > _MAX_BIBTEX_BYTES:
+        raise HTTPException(status_code=413, detail="BibTeX file is too large")
+    for encoding in ("utf-8", "latin-1", "gbk"):
+        try:
+            return content.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    raise HTTPException(status_code=400, detail="Unable to decode file")
+
+
 def _process_bibtex(
     task_id: str,
     content: str,
@@ -111,6 +188,11 @@ def _process_bibtex(
         task = db.query(ImportTask).filter(ImportTask.id == task_id).first()
         if not task:
             return
+        user = (
+            db.query(User).filter(User.id == user_id, User.is_active.is_(True)).first()
+        )
+        if not user or task.user_id != user_id:
+            raise ValueError("Import task owner no longer exists or is inactive")
 
         papers_data = parse_bibtex_content(content)
         total = len(papers_data)
@@ -141,6 +223,8 @@ def _process_bibtex(
 
         for pd in papers_data:
             entry_id = pd.pop("_entry_id", "unknown")
+            savepoint = db.begin_nested()
+            duplicate_result = None
             try:
                 # Use collection owner for scoped deduplication
                 existing, dup_info = find_duplicate_paper(db, pd, owner_user_id=user_id)
@@ -157,21 +241,27 @@ def _process_bibtex(
                         decision = duplicate_strategy  # "keep_existing" or "use_new"
 
                     if decision == "skip":
+                        savepoint.commit()
                         skipped += 1
                         errors.append(
                             {"entry_id": entry_id, "reason": "Skipped by user"}
                         )
                         continue
                     elif decision == "use_new":
-                        # Update existing paper with new data
-                        for key, value in pd.items():
-                            if value is not None:  # Only update non-null fields
-                                setattr(existing, key, value)
-                        paper = existing
+                        paper = update_paper_for_collection(
+                            db,
+                            existing,
+                            cid,
+                            {
+                                key: value
+                                for key, value in pd.items()
+                                if value is not None
+                            },
+                        )
                     else:  # keep_existing
                         paper = existing
 
-                    duplicates_merged.append(dup_info.dict())
+                    duplicate_result = dup_info.dict()
                 else:
                     # No duplicate found, create new paper
                     paper = Paper(**pd)
@@ -197,11 +287,24 @@ def _process_bibtex(
                         display_order=success,
                     )
                     db.add(cp)
+                db.flush()
+                savepoint.commit()
+                if duplicate_result:
+                    duplicates_merged.append(duplicate_result)
                 success += 1
             except Exception as e:
+                if savepoint.is_active:
+                    savepoint.rollback()
                 logger.error(f"Error importing entry {entry_id}: {e}")
-                errors.append({"entry_id": entry_id, "reason": str(e)})
+                errors.append({"entry_id": entry_id, "reason": _exception_detail(e)})
                 skipped += 1
+
+        if not (
+            db.query(User.id)
+            .filter(User.id == user_id, User.is_active.is_(True))
+            .first()
+        ):
+            raise ValueError("Import task owner no longer exists or is inactive")
 
         task.status = "completed"
         task.collection_id = cid
@@ -220,12 +323,7 @@ def _process_bibtex(
         db.commit()
     except Exception as e:
         logger.error(f"Import task {task_id} failed: {e}")
-        task = db.query(ImportTask).filter(ImportTask.id == task_id).first()
-        if task:
-            task.status = "failed"
-            task.result = {"error": str(e)}
-            task.completed_at = datetime.now(timezone.utc)
-            db.commit()
+        _mark_import_failed(db, task_id, e)
     finally:
         db.close()
 
@@ -243,15 +341,14 @@ def _process_bibtex_append(
     """Background task to append BibTeX papers to an existing collection with strategy-based dedup control."""
     db = SessionLocal()
     try:
-        task = db.query(ImportTask).filter(ImportTask.id == task_id).first()
-        if not task:
-            return
+        # Resolve the exact target collection. Editors must never deduplicate
+        # against other private collections owned by the collection creator.
+        _require_append_import_authorization(db, task_id, user_id, collection_id)
 
-        # Get collection to determine owner
-        collection = db.query(Collection).filter(Collection.id == collection_id).first()
-        if not collection:
-            raise ValueError(f"Collection {collection_id} not found")
-        owner_user_id = collection.created_by
+        # Parsing can be CPU-intensive. End the initial read transaction so a
+        # concurrent permission revocation can commit, then authorize again in
+        # a fresh transaction before staging any writes.
+        db.rollback()
 
         papers_data = parse_bibtex_content(content)
         total = len(papers_data)
@@ -259,6 +356,12 @@ def _process_bibtex_append(
         skipped = 0
         errors = []
         duplicates_merged = []
+
+        # Parsing may be expensive; close the meaningful revocation window
+        # before starting the write transaction.
+        task, collection, _user = _require_append_import_authorization(
+            db, task_id, user_id, collection_id
+        )
 
         max_order = (
             db.query(func.max(CollectionPaper.display_order))
@@ -269,13 +372,35 @@ def _process_bibtex_append(
 
         for pd in papers_data:
             entry_id = pd.pop("_entry_id", "unknown")
+            savepoint = db.begin_nested()
+            duplicate_result = None
+            added_association = False
             try:
-                # Use collection owner for scoped deduplication
                 existing, dup_info = find_duplicate_paper(
-                    db, pd, owner_user_id=owner_user_id
+                    db, pd, collection_id=collection_id
                 )
 
                 if existing and dup_info:
+                    existing_in_collection = (
+                        db.query(CollectionPaper.id)
+                        .filter(
+                            CollectionPaper.collection_id == collection_id,
+                            CollectionPaper.paper_id == existing.id,
+                        )
+                        .first()
+                    )
+                    if existing_in_collection and skip_collection_duplicates:
+                        savepoint.commit()
+                        duplicates_merged.append(dup_info.dict())
+                        skipped += 1
+                        errors.append(
+                            {
+                                "entry_id": entry_id,
+                                "reason": _msg(lang, "already_in_collection"),
+                            }
+                        )
+                        continue
+
                     # Determine action based on strategy
                     if duplicate_strategy == "manual":
                         decision = (duplicate_decisions or {}).get(
@@ -285,20 +410,27 @@ def _process_bibtex_append(
                         decision = duplicate_strategy
 
                     if decision == "skip":
+                        savepoint.commit()
                         skipped += 1
                         errors.append(
                             {"entry_id": entry_id, "reason": "Skipped by user"}
                         )
                         continue
                     elif decision == "use_new":
-                        for key, value in pd.items():
-                            if value is not None:
-                                setattr(existing, key, value)
-                        paper = existing
+                        paper = update_paper_for_collection(
+                            db,
+                            existing,
+                            collection_id,
+                            {
+                                key: value
+                                for key, value in pd.items()
+                                if value is not None
+                            },
+                        )
                     else:  # keep_existing
                         paper = existing
 
-                    duplicates_merged.append(dup_info.dict())
+                    duplicate_result = dup_info.dict()
                 else:
                     paper = Paper(**pd)
                     db.add(paper)
@@ -314,31 +446,39 @@ def _process_bibtex_append(
                     .first()
                 )
                 if cp_exists:
-                    if skip_collection_duplicates:
-                        skipped += 1
-                        errors.append(
-                            {
-                                "entry_id": entry_id,
-                                "reason": _msg(lang, "already_in_collection"),
-                            }
-                        )
-                        continue
-
-                max_order += 1
-                cp = CollectionPaper(
-                    collection_id=collection_id,
-                    paper_id=paper.id,
-                    group_name=_msg(lang, "group_imported"),
-                    group_tag="imported",
-                    section_name="All Papers",
-                    display_order=max_order,
-                )
-                db.add(cp)
+                    # CollectionPaper intentionally permits one occurrence of a
+                    # paper per collection. When duplicate skipping is disabled,
+                    # applying the selected update is still a successful no-op
+                    # for the association rather than a uniqueness violation.
+                    pass
+                else:
+                    cp = CollectionPaper(
+                        collection_id=collection_id,
+                        paper_id=paper.id,
+                        group_name=_msg(lang, "group_imported"),
+                        group_tag="imported",
+                        section_name="All Papers",
+                        display_order=max_order + 1,
+                    )
+                    db.add(cp)
+                    added_association = True
+                db.flush()
+                savepoint.commit()
+                if added_association:
+                    max_order += 1
+                if duplicate_result:
+                    duplicates_merged.append(duplicate_result)
                 success += 1
             except Exception as e:
+                if savepoint.is_active:
+                    savepoint.rollback()
                 logger.error(f"Error importing entry {entry_id}: {e}")
-                errors.append({"entry_id": entry_id, "reason": str(e)})
+                errors.append({"entry_id": entry_id, "reason": _exception_detail(e)})
                 skipped += 1
+
+        task, collection, _user = _require_append_import_authorization(
+            db, task_id, user_id, collection_id
+        )
 
         task.status = "completed"
         task.collection_id = collection_id
@@ -357,12 +497,7 @@ def _process_bibtex_append(
         db.commit()
     except Exception as e:
         logger.error(f"Import append task {task_id} failed: {e}")
-        task = db.query(ImportTask).filter(ImportTask.id == task_id).first()
-        if task:
-            task.status = "failed"
-            task.result = {"error": str(e)}
-            task.completed_at = datetime.now(timezone.utc)
-            db.commit()
+        _mark_import_failed(db, task_id, e)
     finally:
         db.close()
 
@@ -377,45 +512,45 @@ async def scan_bibtex_for_duplicates(
 ):
     """Scan BibTeX file for duplicates without importing.
 
-    If collection_id is provided, uses collection owner for scoped deduplication.
-    Otherwise, uses current user for scoped deduplication.
+    If collection_id is provided, searches only that editable collection.
+    Otherwise, searches collections owned by the current user.
     """
-    if not file.filename or not file.filename.endswith(".bib"):
-        raise HTTPException(status_code=400, detail="Only .bib files are accepted")
+    text = await _read_bibtex(file)
 
-    content = await file.read()
-    text = None
-    for encoding in ("utf-8", "latin-1", "gbk"):
-        try:
-            text = content.decode(encoding)
-            break
-        except UnicodeDecodeError:
-            continue
-    if text is None:
-        raise HTTPException(status_code=400, detail="Unable to decode file")
-
-    # Determine owner for scoped deduplication
-    owner_user_id = current_user.id
     if collection_id:
         collection = db.query(Collection).filter(Collection.id == collection_id).first()
-        if collection:
-            owner_user_id = collection.created_by
+        if not collection:
+            raise HTTPException(status_code=404, detail="Collection not found")
+        if not check_collection_permission(db, current_user.id, collection_id, "edit"):
+            raise HTTPException(status_code=403, detail="No permission")
 
     papers_data = parse_bibtex_content(text)
     duplicates: list[dict] = []
 
     for pd in papers_data:
-        existing, dup_info = find_duplicate_paper(db, pd, owner_user_id=owner_user_id)
+        existing, dup_info = find_duplicate_paper(
+            db,
+            pd,
+            collection_id=collection_id,
+            owner_user_id=None if collection_id else current_user.id,
+        )
         if existing and dup_info:
             duplicates.append(dup_info.dict())
 
     # Store in cache
     scan_id = str(uuid.uuid4())
     _cleanup_expired_scans()
+    while len(_scan_cache) >= _MAX_SCAN_CACHE_ENTRIES:
+        oldest_scan_id = min(
+            _scan_cache, key=lambda cached_id: _scan_cache[cached_id]["timestamp"]
+        )
+        del _scan_cache[oldest_scan_id]
     _scan_cache[scan_id] = {
         "content": text,
         "timestamp": datetime.now(timezone.utc),
         "duplicates": duplicates,
+        "user_id": current_user.id,
+        "collection_id": collection_id,
     }
 
     return {
@@ -441,28 +576,15 @@ async def import_bibtex(
 ):
     # Get content from file or scan cache
     if scan_id:
-        if scan_id not in _scan_cache:
-            raise HTTPException(status_code=404, detail="Scan expired or not found")
-        text = _scan_cache[scan_id]["content"]
+        scan = _get_user_scan(scan_id, current_user.id)
+        text = scan["content"]
         # Extract filename from scan if available
         if not collection_name:
             collection_name = "Imported Collection"
     else:
         if not file:
             raise HTTPException(status_code=400, detail="File or scan_id required")
-        if not file.filename or not file.filename.endswith(".bib"):
-            raise HTTPException(status_code=400, detail="Only .bib files are accepted")
-
-        content = await file.read()
-        text = None
-        for encoding in ("utf-8", "latin-1", "gbk"):
-            try:
-                text = content.decode(encoding)
-                break
-            except UnicodeDecodeError:
-                continue
-        if text is None:
-            raise HTTPException(status_code=400, detail="Unable to decode file")
+        text = await _read_bibtex(file)
 
         if not collection_name:
             collection_name = (
@@ -476,7 +598,7 @@ async def import_bibtex(
     if skip_dedup is not None:
         duplicate_strategy = "use_new" if skip_dedup else "keep_existing"
 
-    decisions = json.loads(duplicate_decisions) if duplicate_decisions else None
+    decisions = _validate_duplicate_options(duplicate_strategy, duplicate_decisions)
 
     task_id = str(uuid.uuid4())
     task = ImportTask(
@@ -487,6 +609,8 @@ async def import_bibtex(
     )
     db.add(task)
     db.commit()
+    if scan_id:
+        _scan_cache.pop(scan_id, None)
 
     background_tasks.add_task(
         _process_bibtex,
@@ -515,8 +639,6 @@ async def import_bibtex_to_collection(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    from services.permission_service import check_collection_permission
-
     if not check_collection_permission(db, current_user.id, collection_id, "edit"):
         raise HTTPException(status_code=403, detail="No permission")
     c = db.query(Collection).filter(Collection.id == collection_id).first()
@@ -525,31 +647,23 @@ async def import_bibtex_to_collection(
 
     # Get content from file or scan cache
     if scan_id:
-        if scan_id not in _scan_cache:
-            raise HTTPException(status_code=404, detail="Scan expired or not found")
-        text = _scan_cache[scan_id]["content"]
+        scan = _get_user_scan(scan_id, current_user.id)
+        if scan.get("collection_id") != collection_id:
+            raise HTTPException(
+                status_code=400,
+                detail="Scan was created for a different collection",
+            )
+        text = scan["content"]
     else:
         if not file:
             raise HTTPException(status_code=400, detail="File or scan_id required")
-        if not file.filename or not file.filename.endswith(".bib"):
-            raise HTTPException(status_code=400, detail="Only .bib files are accepted")
-
-        content = await file.read()
-        text = None
-        for encoding in ("utf-8", "latin-1", "gbk"):
-            try:
-                text = content.decode(encoding)
-                break
-            except UnicodeDecodeError:
-                continue
-        if text is None:
-            raise HTTPException(status_code=400, detail="Unable to decode file")
+        text = await _read_bibtex(file)
 
     # Backward compatibility
     if skip_dedup is not None:
         duplicate_strategy = "use_new" if skip_dedup else "keep_existing"
 
-    decisions = json.loads(duplicate_decisions) if duplicate_decisions else None
+    decisions = _validate_duplicate_options(duplicate_strategy, duplicate_decisions)
 
     task_id = str(uuid.uuid4())
     task = ImportTask(
@@ -560,6 +674,8 @@ async def import_bibtex_to_collection(
     )
     db.add(task)
     db.commit()
+    if scan_id:
+        _scan_cache.pop(scan_id, None)
 
     background_tasks.add_task(
         _process_bibtex_append,
@@ -696,9 +812,8 @@ async def import_arxiv_to_collection(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    from services.permission_service import check_collection_permission
-
-    if not check_collection_permission(db, current_user.id, collection_id, "edit"):
+    user_id = current_user.id
+    if not check_collection_permission(db, user_id, collection_id, "edit"):
         raise HTTPException(status_code=403, detail="No permission")
     c = db.query(Collection).filter(Collection.id == collection_id).first()
     if not c:
@@ -714,6 +829,10 @@ async def import_arxiv_to_collection(
     if not arxiv_id:
         raise HTTPException(status_code=400, detail=_msg(lang, "cannot_parse_arxiv"))
 
+    # Do not hold the authorization read transaction across the remote call.
+    # This lets revocations commit and makes the post-fetch check a fresh read.
+    db.rollback()
+
     try:
         meta = await _fetch_arxiv_metadata(arxiv_id)
     except Exception as e:
@@ -727,9 +846,14 @@ async def import_arxiv_to_collection(
             detail=f"{_msg(lang, 'fetch_arxiv_failed')}: {_exception_detail(e)}",
         )
 
-    # Dedup: check if paper already exists using collection-scoped deduplication
-    owner_user_id = c.created_by
-    existing, dup_info = find_duplicate_paper(db, meta, owner_user_id=owner_user_id)
+    if not (
+        db.query(User.id).filter(User.id == user_id, User.is_active.is_(True)).first()
+    ) or not check_collection_permission(db, user_id, collection_id, "edit"):
+        raise HTTPException(status_code=403, detail="No permission")
+
+    # Never search other private collections owned by a shared collection's
+    # creator: an editor may deduplicate only within the target collection.
+    existing, dup_info = find_duplicate_paper(db, meta, collection_id=collection_id)
     if existing:
         paper = existing
     else:
@@ -770,6 +894,10 @@ async def import_arxiv_to_collection(
         display_order=max_order + 1,
     )
     db.add(cp)
+
+    if not check_collection_permission(db, user_id, collection_id, "edit"):
+        db.rollback()
+        raise HTTPException(status_code=403, detail="No permission")
     db.commit()
 
     return {"ok": True, "paper_id": paper.id, "title": meta["title"], "skipped": False}

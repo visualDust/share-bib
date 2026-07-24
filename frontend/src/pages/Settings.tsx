@@ -22,6 +22,12 @@ import {
 import client from "../api/client";
 import { useSystemStatus } from "../App";
 import ProfileEditModal from "../components/ProfileEditModal";
+import { useTheme, type ThemePreference } from "../hooks/useTheme";
+import {
+  getLanguagePreference,
+  resolveLanguagePreference,
+  type LanguagePreference,
+} from "../i18n";
 import "../styles/surfaces.css";
 
 const { Title, Text } = Typography;
@@ -52,12 +58,14 @@ export default function Settings() {
   const navigate = useNavigate();
   const { t, i18n } = useTranslation();
   const { status, setStatus } = useSystemStatus();
+  const { themePreference, setThemePreference } = useTheme();
   const [loading, setLoading] = useState(true);
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
 
   // Language & Theme
-  const [language, setLanguage] = useState<string>("auto");
-  const [theme, setTheme] = useState<string>("auto");
+  const [language, setLanguage] = useState<LanguagePreference>(
+    getLanguagePreference,
+  );
 
   // Branding (admin only)
   const [branding, setBranding] = useState<string>("");
@@ -115,45 +123,16 @@ export default function Settings() {
     if (status?.branding) {
       setBranding(status.branding);
     }
-
-    // Load language preference
-    const savedLang = localStorage.getItem("i18nextLng");
-    if (savedLang === "zh" || savedLang === "en") {
-      setLanguage(savedLang);
-    } else {
-      setLanguage("auto");
-    }
-
-    // Load theme preference
-    const savedTheme = localStorage.getItem("theme");
-    setTheme(savedTheme || "auto");
   }, [navigate]);
 
-  const handleLanguageChange = (value: string) => {
+  const handleLanguageChange = (value: LanguagePreference) => {
     setLanguage(value);
-    if (value === "auto") {
-      localStorage.removeItem("i18nextLng");
-      const browserLang = navigator.language.toLowerCase().startsWith("zh")
-        ? "zh"
-        : "en";
-      i18n.changeLanguage(browserLang);
-    } else {
-      i18n.changeLanguage(value);
-    }
+    localStorage.setItem("sharebib-language-preference", value);
+    void i18n.changeLanguage(resolveLanguagePreference(value));
   };
 
-  const handleThemeChange = (value: string) => {
-    setTheme(value);
-    if (value === "auto") {
-      localStorage.removeItem("theme");
-      const prefersDark = window.matchMedia(
-        "(prefers-color-scheme: dark)",
-      ).matches;
-      document.body.setAttribute("theme-mode", prefersDark ? "dark" : "light");
-    } else {
-      localStorage.setItem("theme", value);
-      document.body.setAttribute("theme-mode", value);
-    }
+  const handleThemeChange = (value: ThemePreference) => {
+    setThemePreference(value);
   };
 
   const handleBrandingUpdate = async () => {
@@ -282,6 +261,7 @@ export default function Settings() {
 
       <div className="settings-shell">
         <nav className="settings-nav" aria-label={t("settings.title")}>
+          <a href="#settings-language">{t("settings.language")}</a>
           <a href="#settings-appearance">{t("settings.appearance")}</a>
           <a href="#settings-account">{t("settings.account")}</a>
           {userInfo?.is_admin && (
@@ -292,36 +272,46 @@ export default function Settings() {
         </nav>
 
         <div className="settings-sections">
+          <section id="settings-language">
+            <Card className="surface-card">
+              <Title heading={5} style={{ marginBottom: 16 }}>
+                {t("settings.language")}
+              </Title>
+              <Select
+                value={language}
+                onChange={(value) =>
+                  handleLanguageChange(value as LanguagePreference)
+                }
+                style={{ width: "100%" }}
+                aria-label={t("settings.language")}
+              >
+                <Select.Option value="auto">
+                  {t("settings.languageAuto")}
+                </Select.Option>
+                <Select.Option value="zh">
+                  {t("settings.languageChinese")}
+                </Select.Option>
+                <Select.Option value="en">
+                  {t("settings.languageEnglish")}
+                </Select.Option>
+              </Select>
+            </Card>
+          </section>
+
           <section id="settings-appearance">
             <Card className="surface-card">
               <Title heading={5} style={{ marginBottom: 16 }}>
                 {t("settings.appearance")}
               </Title>
-              <div style={{ marginBottom: 16 }}>
-                <label className="form-label">{t("settings.language")}</label>
-                <Select
-                  value={language}
-                  onChange={(v) => handleLanguageChange(v as string)}
-                  style={{ width: "100%" }}
-                >
-                  <Select.Option value="auto">
-                    {t("settings.languageAuto")}
-                  </Select.Option>
-                  <Select.Option value="zh">
-                    {t("settings.languageChinese")}
-                  </Select.Option>
-                  <Select.Option value="en">
-                    {t("settings.languageEnglish")}
-                  </Select.Option>
-                </Select>
-              </div>
               <div>
                 <label className="form-label">{t("settings.theme")}</label>
                 <RadioGroup
                   type="button"
                   buttonSize="middle"
-                  value={theme}
-                  onChange={(e) => handleThemeChange(e.target.value)}
+                  value={themePreference}
+                  onChange={(e) =>
+                    handleThemeChange(e.target.value as ThemePreference)
+                  }
                   style={{ width: "100%" }}
                 >
                   <Radio value="auto">{t("settings.themeAuto")}</Radio>
@@ -805,7 +795,7 @@ npx skills add visualdust/sharebib -a windsurf`}
                 fontSize: 12,
               }}
             >
-              {`export SHAREBIB_API_KEY="pc_..."
+              {`export SHAREBIB_API_KEY="sb_..."
 export SHAREBIB_BASE_URL="https://your-sharebib.example.com"
 
 sharebib auth info`}

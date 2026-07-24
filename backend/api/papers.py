@@ -1,14 +1,33 @@
+from datetime import datetime, timezone
+
+from auth.deps import get_admin_user, get_current_user
+from database import get_db
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from models import Collection, CollectionPaper, Paper, User, UserPaperMeta
+from schemas import PaperCreate, PaperOut, PaperUpdate
+from schemas.user_paper_meta import UserPaperMetaOut, UserPaperMetaUpdate
+from services.paper_service import (
+    accessible_paper_ids,
+    check_paper_permission,
+    update_paper_for_collection,
+)
+from services.permission_service import check_collection_permission
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from auth.deps import get_current_user
-from database import get_db
-from models import User, Paper, CollectionPaper, UserPaperMeta
-from schemas import PaperCreate, PaperUpdate, PaperOut
-from schemas.user_paper_meta import UserPaperMetaOut, UserPaperMetaUpdate
-
 router = APIRouter(prefix="/api/papers", tags=["papers"])
+
+
+def _visible_papers(db: Session, user_id: str):
+    return db.query(Paper).filter(Paper.id.in_(accessible_paper_ids(user_id)))
+
+
+def _get_visible_paper(db: Session, user_id: str, paper_id: str) -> Paper:
+    paper = _visible_papers(db, user_id).filter(Paper.id == paper_id).first()
+    if not paper:
+        # Do not reveal whether a paper exists in an inaccessible collection.
+        raise HTTPException(status_code=404, detail="Paper not found")
+    return paper
 
 
 @router.get("", response_model=list[PaperOut])
@@ -16,12 +35,12 @@ def list_papers(
     q: str | None = None,
     year: int | None = None,
     status_filter: str | None = Query(None, alias="status"),
-    limit: int = 50,
-    offset: int = 0,
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    query = db.query(Paper)
+    query = _visible_papers(db, current_user.id)
     if q:
         query = query.filter(
             or_(Paper.title.ilike(f"%{q}%"), Paper.abstract.ilike(f"%{q}%"))
@@ -36,11 +55,21 @@ def list_papers(
 @router.post("", response_model=PaperOut, status_code=status.HTTP_201_CREATED)
 def create_paper(
     data: PaperCreate,
+    collection_id: str = Query(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    if not check_collection_permission(db, current_user.id, collection_id, "edit"):
+        raise HTTPException(status_code=403, detail="No permission")
+    collection = db.query(Collection).filter(Collection.id == collection_id).first()
+    if not collection:
+        raise HTTPException(status_code=404, detail="Collection not found")
+
     paper = Paper(**data.model_dump())
     db.add(paper)
+    db.flush()
+    db.add(CollectionPaper(collection_id=collection_id, paper_id=paper.id))
+    collection.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(paper)
     return paper
@@ -49,12 +78,12 @@ def create_paper(
 @router.get("/search", response_model=list[PaperOut])
 def search_papers(
     q: str,
-    limit: int = 50,
+    limit: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     return (
-        db.query(Paper)
+        _visible_papers(db, current_user.id)
         .filter(or_(Paper.title.ilike(f"%{q}%"), Paper.abstract.ilike(f"%{q}%")))
         .limit(limit)
         .all()
@@ -67,7 +96,9 @@ def get_by_arxiv(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    paper = db.query(Paper).filter(Paper.arxiv_id == arxiv_id).first()
+    paper = (
+        _visible_papers(db, current_user.id).filter(Paper.arxiv_id == arxiv_id).first()
+    )
     if not paper:
         raise HTTPException(status_code=404, detail="Paper not found")
     return paper
@@ -79,24 +110,40 @@ def get_paper(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    paper = db.query(Paper).filter(Paper.id == paper_id).first()
-    if not paper:
-        raise HTTPException(status_code=404, detail="Paper not found")
-    return paper
+    return _get_visible_paper(db, current_user.id, paper_id)
 
 
 @router.put("/{paper_id}", response_model=PaperOut)
 def update_paper(
     paper_id: str,
     data: PaperUpdate,
+    collection_id: str = Query(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    if not check_collection_permission(db, current_user.id, collection_id, "edit"):
+        raise HTTPException(status_code=403, detail="No permission")
     paper = db.query(Paper).filter(Paper.id == paper_id).first()
-    if not paper:
-        raise HTTPException(status_code=404, detail="Paper not found")
-    for field, value in data.model_dump(exclude_unset=True).items():
-        setattr(paper, field, value)
+    collection_ref = (
+        db.query(CollectionPaper)
+        .filter(
+            CollectionPaper.collection_id == collection_id,
+            CollectionPaper.paper_id == paper_id,
+        )
+        .first()
+    )
+    if not paper or not collection_ref:
+        raise HTTPException(status_code=404, detail="Paper not found in collection")
+
+    paper = update_paper_for_collection(
+        db,
+        paper,
+        collection_id,
+        data.model_dump(exclude_unset=True),
+    )
+    collection = db.query(Collection).filter(Collection.id == collection_id).first()
+    if collection:
+        collection.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(paper)
     return paper
@@ -106,8 +153,9 @@ def update_paper(
 def delete_paper(
     paper_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    admin: User = Depends(get_admin_user),
 ):
+    """Delete an unreferenced global row as an administrator maintenance action."""
     paper = db.query(Paper).filter(Paper.id == paper_id).first()
     if not paper:
         raise HTTPException(status_code=404, detail="Paper not found")
@@ -131,6 +179,8 @@ def get_paper_meta(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    if not check_paper_permission(db, current_user.id, paper_id, "view"):
+        raise HTTPException(status_code=404, detail="Paper not found")
     meta = (
         db.query(UserPaperMeta)
         .filter(
@@ -151,8 +201,7 @@ def update_paper_meta(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    paper = db.query(Paper).filter(Paper.id == paper_id).first()
-    if not paper:
+    if not check_paper_permission(db, current_user.id, paper_id, "view"):
         raise HTTPException(status_code=404, detail="Paper not found")
     meta = (
         db.query(UserPaperMeta)

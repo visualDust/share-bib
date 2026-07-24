@@ -8,7 +8,6 @@ import {
   IconUser,
   IconSetting,
 } from "@douyinfe/semi-icons";
-import { IconTabs } from "@douyinfe/semi-icons-lab";
 import client from "../api/client";
 import { useSystemStatus } from "../App";
 import "../styles/surfaces.css";
@@ -86,7 +85,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             aria-label={status?.branding || t("app.title")}
           >
             <span className="brand-mark" aria-hidden="true">
-              <IconTabs size="large" />
+              <img src="/sharebib-mark.svg" alt="" />
             </span>
             {!isMobile && status?.branding && (
               <span className="brand-name">{status.branding}</span>

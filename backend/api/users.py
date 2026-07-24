@@ -1,22 +1,28 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
-from pydantic import BaseModel
-
 from auth.deps import get_current_user
-from auth.simple import verify_password, get_password_hash
+from auth.simple import get_password_hash, verify_password
 from database import get_db
-from models import User, Collection, CollectionPermission, CollectionPaper, Paper
+from fastapi import APIRouter, Depends, HTTPException, Query
+from models import Collection, CollectionPaper, CollectionPermission, Paper, User
+from pydantic import BaseModel, EmailStr
 from schemas import UserBrief
 from schemas.collection import CollectionListOut, StatsOut
-from schemas.user import UserBrief as UserBriefSchema, ChangePassword
+from schemas.user import (
+    ChangePassword,
+    DisplayName,
+    Username,
+)
+from schemas.user import (
+    UserBrief as UserBriefSchema,
+)
+from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/api/users", tags=["users"])
 
 
 class UpdateUserProfile(BaseModel):
-    username: str
-    display_name: str | None = None
-    email: str | None = None
+    username: Username
+    display_name: DisplayName | None = None
+    email: EmailStr | None = None
 
 
 @router.get("/search", response_model=list[UserBrief])
@@ -27,7 +33,11 @@ def search_users(
 ):
     users = (
         db.query(User)
-        .filter(User.username.ilike(f"%{q}%"), User.id != current_user.id)
+        .filter(
+            User.username.ilike(f"%{q}%"),
+            User.id != current_user.id,
+            User.is_active.is_(True),
+        )
         .limit(10)
         .all()
     )
@@ -68,10 +78,15 @@ def get_user_profile(
     if current_user.id == user.id:
         visible = own_collections.order_by(Collection.created_at.desc()).all()
     else:
-        public = own_collections.filter(Collection.visibility == "public")
+        public = own_collections.filter(
+            Collection.visibility.in_(["public", "public_editable"])
+        )
         shared_ids = (
             db.query(CollectionPermission.collection_id)
-            .filter(CollectionPermission.user_id == current_user.id)
+            .filter(
+                CollectionPermission.user_id == current_user.id,
+                CollectionPermission.permission.in_(["view", "edit"]),
+            )
             .subquery()
         )
         shared = own_collections.filter(Collection.id.in_(shared_ids))
@@ -121,6 +136,7 @@ def change_password(
         raise HTTPException(status_code=400, detail="旧密码不正确")
 
     current_user.password_hash = get_password_hash(body.new_password)
+    current_user.token_version += 1
     db.commit()
 
     return {"detail": "密码修改成功"}
@@ -128,7 +144,7 @@ def change_password(
 
 @router.get("/me/check")
 def check_field_availability(
-    field: str = Query(..., regex="^(username|email)$"),
+    field: str = Query(..., pattern="^(username|email)$"),
     value: str = Query(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),

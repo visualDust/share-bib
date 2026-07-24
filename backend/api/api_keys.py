@@ -67,7 +67,7 @@ def create_api_key(
     # Generate new key
     plain_key = ApiKey.generate_key()
     key_hash = ApiKey.hash_key(plain_key)
-    key_prefix = plain_key[:11]  # "pc_" + first 8 chars
+    key_prefix = plain_key[:11]  # "sb_" + first 8 chars
 
     # Create API key record
     api_key = ApiKey(

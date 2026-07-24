@@ -1,10 +1,9 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import String, Boolean, DateTime, ForeignKey, JSON
-from sqlalchemy.orm import Mapped, mapped_column
-
 from database import Base
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, String
+from sqlalchemy.orm import Mapped, mapped_column
 
 
 class CrawlTask(Base):
@@ -14,7 +13,10 @@ class CrawlTask(Base):
         String, primary_key=True, default=lambda: str(uuid.uuid4())
     )
     user_id: Mapped[str] = mapped_column(
-        String, ForeignKey("users.id"), nullable=False, index=True
+        String,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     name: Mapped[str] = mapped_column(String, nullable=False)
 

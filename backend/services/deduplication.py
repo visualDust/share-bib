@@ -48,14 +48,18 @@ def normalize_title(title: str) -> str:
 
 
 def find_duplicate_paper(
-    db: Session, paper_data: dict, owner_user_id: str | None = None
+    db: Session,
+    paper_data: dict,
+    owner_user_id: str | None = None,
+    collection_id: str | None = None,
 ) -> tuple[Paper | None, DuplicateInfo | None]:
     """
     Find duplicate paper using 4-step matching priority.
 
-    If owner_user_id is provided, only searches within papers that belong to
-    collections owned by that user (collection-scoped deduplication).
-    Otherwise, searches globally across all papers.
+    If collection_id is provided, searches only that collection. Otherwise, if
+    owner_user_id is provided, searches papers in collections owned by that
+    user. Global search is retained only for trusted internal callers that omit
+    both scopes.
 
     Returns (existing_paper, duplicate_info) or (None, None).
     """
@@ -65,6 +69,13 @@ def find_duplicate_paper(
 
     # Build base query with optional owner filtering
     def get_paper_query():
+        if collection_id:
+            return (
+                db.query(Paper)
+                .join(CollectionPaper, CollectionPaper.paper_id == Paper.id)
+                .filter(CollectionPaper.collection_id == collection_id)
+                .distinct()
+            )
         if owner_user_id:
             # Only search papers in collections owned by this user
             return (
@@ -74,9 +85,8 @@ def find_duplicate_paper(
                 .filter(Collection.created_by == owner_user_id)
                 .distinct()
             )
-        else:
-            # Global search
-            return db.query(Paper)
+        # Global search
+        return db.query(Paper)
 
     # 1. Try BibTeX key
     if paper_data.get("bibtex_key"):

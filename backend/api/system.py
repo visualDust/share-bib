@@ -1,20 +1,25 @@
-from pathlib import Path
 import secrets
+from pathlib import Path
 from urllib.parse import urlencode
 
 import httpx
 import yaml
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import RedirectResponse
-from pydantic import BaseModel
-from sqlalchemy.orm import Session
-
+from auth.deps import get_admin_user
 from auth.jwt_handler import create_access_token
 from auth.simple import get_password_hash
-from auth.deps import get_admin_user
 from config import config
 from database import get_db
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import RedirectResponse
 from models import User
+from pydantic import BaseModel, EmailStr
+from schemas.user import DisplayName, NewPassword, Username
+from services.user_identity import (
+    normalize_display_name,
+    normalize_oauth_email,
+    normalize_oauth_username,
+)
+from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/api/system", tags=["system"])
 
@@ -27,10 +32,10 @@ class SystemStatusResponse(BaseModel):
 
 
 class SetupRequest(BaseModel):
-    username: str
-    password: str
-    display_name: str | None = None
-    email: str | None = None
+    username: Username
+    password: NewPassword
+    display_name: DisplayName | None = None
+    email: EmailStr | None = None
 
 
 class SetupResponse(BaseModel):
@@ -58,18 +63,13 @@ def setup_admin(body: SetupRequest, db: Session = Depends(get_db)):
     if db.query(User).count() > 0:
         raise HTTPException(status_code=409, detail="System already initialized")
 
-    if not body.username or not body.username.strip():
-        raise HTTPException(status_code=422, detail="Username is required")
-    if not body.password or len(body.password) < 6:
-        raise HTTPException(
-            status_code=422, detail="Password must be at least 6 characters"
-        )
-
     user = User(
-        username=body.username.strip(),
+        username=body.username,
         password_hash=get_password_hash(body.password),
         display_name=body.display_name,
         email=body.email or None,
+        is_admin=True,
+        admin_source="setup",
         is_active=True,
     )
     db.add(user)
@@ -79,7 +79,9 @@ def setup_admin(body: SetupRequest, db: Session = Depends(get_db)):
     # Persist admin_username to config.yaml
     _update_config_admin_username(user.username)
 
-    token = create_access_token({"sub": user.id, "username": user.username})
+    token = create_access_token(
+        {"sub": user.id, "username": user.username, "ver": user.token_version}
+    )
     return SetupResponse(access_token=token, username=user.username)
 
 
@@ -102,6 +104,7 @@ def _update_config_admin_username(username: str):
 
     with open(config_path, "w") as f:
         yaml.dump(data, f, default_flow_style=False, allow_unicode=True)
+    os.chmod(config_path, 0o600)
 
     # Update the in-memory config
     config.admin_username = username
@@ -180,14 +183,17 @@ def setup_oauth_callback(code: str, state: str, db: Session = Depends(get_db)):
     if not oauth_sub:
         raise HTTPException(400, "OAuth provider did not return a user identifier")
 
-    username = (
+    username_source = (
         userinfo.get("login")
         or userinfo.get("preferred_username")
         or userinfo.get("name")
         or f"user_{oauth_sub[:8]}"
     )
-    email = userinfo.get("email")
-    display_name = userinfo.get("name") or userinfo.get("login")
+    username = normalize_oauth_username(username_source, oauth_sub)
+    email = normalize_oauth_email(userinfo.get("email"))
+    display_name = normalize_display_name(
+        userinfo.get("name") or userinfo.get("login"), username
+    )
 
     user = User(
         username=username,
@@ -195,6 +201,8 @@ def setup_oauth_callback(code: str, state: str, db: Session = Depends(get_db)):
         display_name=display_name,
         oauth_provider=oauth.provider,
         oauth_sub=oauth_sub,
+        is_admin=True,
+        admin_source="setup",
         is_active=True,
     )
     db.add(user)
@@ -203,7 +211,9 @@ def setup_oauth_callback(code: str, state: str, db: Session = Depends(get_db)):
 
     _update_config_admin_username(user.username)
 
-    jwt_token = create_access_token({"sub": user.id, "username": user.username})
+    jwt_token = create_access_token(
+        {"sub": user.id, "username": user.username, "ver": user.token_version}
+    )
     return RedirectResponse(f"/?token={jwt_token}")
 
 
@@ -233,6 +243,7 @@ def _update_config_branding(branding: str):
 
     with open(config_path, "w") as f:
         yaml.dump(data, f, default_flow_style=False, allow_unicode=True)
+    os.chmod(config_path, 0o600)
 
     # Update the in-memory config
     config.branding = branding

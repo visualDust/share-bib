@@ -5,20 +5,20 @@ These endpoints are designed for programmatic access via the Python SDK.
 
 import uuid
 from datetime import datetime
-from typing import Annotated
-
-from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import Response
-from pydantic import BaseModel, Field
-from sqlalchemy import or_, select
-from sqlalchemy.orm import Session
+from typing import Annotated, Literal
 
 from auth.deps import get_current_user, get_user_from_api_key
 from database import get_db
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
 from import_module.bibtex_exporter import export_papers_to_bibtex
-from models import User, Collection, Paper, CollectionPaper, CollectionPermission
+from models import Collection, CollectionPaper, CollectionPermission, Paper, User
+from pydantic import BaseModel, Field
 from services.collection_ids import is_safe_collection_id
+from services.paper_service import check_paper_permission
 from services.permission_service import check_collection_permission
+from sqlalchemy import or_, select
+from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/api/sdk", tags=["sdk"])
 
@@ -64,7 +64,7 @@ class CollectionCreate(BaseModel):
     id: str | None = None
     title: str
     description: str = ""
-    visibility: str = "private"
+    visibility: Literal["private", "shared", "public", "public_editable"] = "private"
     tags: list[str] = Field(default_factory=list)
 
 
@@ -104,7 +104,7 @@ class UserSearchOut(BaseModel):
 
 class PermissionCreate(BaseModel):
     user_id: str
-    permission: str
+    permission: Literal["view", "edit"]
 
 
 class PermissionOut(BaseModel):
@@ -130,7 +130,8 @@ async def get_sdk_user(
 
 def _shared_collection_ids_subquery(user_id: str):
     return select(CollectionPermission.collection_id).filter(
-        CollectionPermission.user_id == user_id
+        CollectionPermission.user_id == user_id,
+        CollectionPermission.permission.in_(["view", "edit"]),
     )
 
 
@@ -258,7 +259,11 @@ def search_users(
     """Search users by username for sharing workflows."""
     users = (
         db.query(User)
-        .filter(User.username.ilike(f"%{q}%"), User.id != user.id)
+        .filter(
+            User.username.ilike(f"%{q}%"),
+            User.id != user.id,
+            User.is_active.is_(True),
+        )
         .limit(limit)
         .all()
     )
@@ -374,9 +379,13 @@ def add_collection_permission(
     if body.permission not in {"view", "edit"}:
         raise HTTPException(400, "Invalid permission value")
 
-    target_user = db.query(User).filter(User.id == body.user_id).first()
+    target_user = (
+        db.query(User).filter(User.id == body.user_id, User.is_active.is_(True)).first()
+    )
     if not target_user:
-        raise HTTPException(404, "User not found")
+        raise HTTPException(404, "Active user not found")
+    if target_user.id == user.id:
+        raise HTTPException(400, "Owner already has full access")
 
     db.query(CollectionPermission).filter(
         CollectionPermission.collection_id == collection_id,
@@ -604,14 +613,9 @@ def get_paper(
     if not paper:
         raise HTTPException(404, "Paper not found")
 
-    collection_refs = (
-        db.query(CollectionPaper).filter(CollectionPaper.paper_id == paper_id).all()
-    )
-    if collection_refs and not any(
-        check_collection_permission(db, user.id, collection_ref.collection_id, "view")
-        for collection_ref in collection_refs
-    ):
-        raise HTTPException(403, "Access denied")
+    if not check_paper_permission(db, user.id, paper_id, "view"):
+        # Do not expose global orphan rows or the existence of private papers.
+        raise HTTPException(404, "Paper not found")
 
     return _paper_to_out(paper)
 

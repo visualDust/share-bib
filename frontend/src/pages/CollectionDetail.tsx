@@ -24,6 +24,8 @@ import {
   IconFilter,
   IconDownload,
   IconSort,
+  IconListView,
+  IconMenu,
 } from "@douyinfe/semi-icons";
 import client from "../api/client";
 import PaperEditSheet from "../components/PaperEditSheet";
@@ -34,6 +36,14 @@ import "../styles/surfaces.css";
 const { Paragraph, Title } = Typography;
 
 const isMobile = () => window.innerWidth < 768;
+
+type PaperLayout = "comfortable" | "compact";
+
+const getInitialPaperLayout = (): PaperLayout => {
+  if (typeof window === "undefined") return "comfortable";
+  const saved = window.localStorage.getItem("sharebib-paper-layout");
+  return saved === "compact" ? "compact" : "comfortable";
+};
 
 interface PaperItem {
   id: string;
@@ -94,6 +104,9 @@ export default function CollectionDetail() {
   const [showAddPapers, setShowAddPapers] = useState(false);
   const [deletingPaper, setDeletingPaper] = useState<PaperItem | null>(null);
   const [mobile, setMobile] = useState(isMobile());
+  const [paperLayout, setPaperLayout] = useState<PaperLayout>(
+    getInitialPaperLayout,
+  );
   const { t } = useTranslation();
 
   const isLoggedIn = !!localStorage.getItem("token");
@@ -150,6 +163,11 @@ export default function CollectionDetail() {
     } catch {
       Toast.error(t("collection.exportFailed"));
     }
+  };
+
+  const handlePaperLayoutChange = (nextLayout: PaperLayout) => {
+    setPaperLayout(nextLayout);
+    window.localStorage.setItem("sharebib-paper-layout", nextLayout);
   };
 
   if (loading)
@@ -494,11 +512,39 @@ export default function CollectionDetail() {
       {sortedPapers.length === 0 ? (
         <Empty description={t("collection.noPapers")} />
       ) : (
-        <section className="data-list paper-index">
+        <section
+          className={`data-list paper-index${paperLayout === "compact" ? " is-compact" : ""}`}
+        >
           <div className="data-list-header">
             <span>
               {t("collection.paperList", { count: sortedPapers.length })}
             </span>
+            <div
+              className="layout-toggle paper-layout-toggle"
+              role="group"
+              aria-label={t("collection.layout")}
+            >
+              <button
+                type="button"
+                className={paperLayout === "comfortable" ? "active" : ""}
+                onClick={() => handlePaperLayoutChange("comfortable")}
+                aria-label={t("collection.comfortableView")}
+                title={t("collection.comfortableView")}
+                aria-pressed={paperLayout === "comfortable"}
+              >
+                <IconListView aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                className={paperLayout === "compact" ? "active" : ""}
+                onClick={() => handlePaperLayoutChange("compact")}
+                aria-label={t("collection.compactView")}
+                title={t("collection.compactView")}
+                aria-pressed={paperLayout === "compact"}
+              >
+                <IconMenu aria-hidden="true" />
+              </button>
+            </div>
           </div>
           <div className="data-list-body">
             {sortedPapers.map((paper, index) => {
@@ -553,7 +599,10 @@ export default function CollectionDetail() {
 
                     {paper.summary && (
                       <Paragraph
-                        ellipsis={{ rows: 2, expandable: true }}
+                        ellipsis={{
+                          rows: mobile ? 4 : 2,
+                          expandable: !mobile,
+                        }}
                         className="paper-summary"
                       >
                         {paper.summary}
@@ -612,18 +661,26 @@ export default function CollectionDetail() {
                             size="small"
                             theme="borderless"
                             icon={<IconEdit />}
+                            aria-label={t("collection.edit")}
+                            title={t("collection.edit")}
                             onClick={() => setEditingPaper(paper)}
                           >
-                            {t("collection.edit")}
+                            {paperLayout === "comfortable"
+                              ? t("collection.edit")
+                              : null}
                           </Button>
                           <Button
                             size="small"
                             theme="borderless"
                             type="danger"
                             icon={<IconDelete />}
+                            aria-label={t("collection.remove")}
+                            title={t("collection.remove")}
                             onClick={() => setDeletingPaper(paper)}
                           >
-                            {t("collection.remove")}
+                            {paperLayout === "comfortable"
+                              ? t("collection.remove")
+                              : null}
                           </Button>
                         </div>
                       )}
@@ -639,6 +696,7 @@ export default function CollectionDetail() {
       <PaperEditSheet
         visible={!!editingPaper}
         paper={editingPaper}
+        collectionId={id!}
         onClose={() => setEditingPaper(null)}
         onSaved={fetchData}
       />

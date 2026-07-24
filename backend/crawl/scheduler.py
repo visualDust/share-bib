@@ -1,10 +1,11 @@
 import asyncio
 import logging
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 
 from database import SessionLocal
 from models.crawl_task import CrawlTask
 from models.crawl_task_run import CrawlTaskRun
+
 from crawl.executor import CrawlExecutor
 
 logger = logging.getLogger(__name__)
@@ -111,16 +112,36 @@ class CrawlScheduler:
 
     async def _execute_task_inner(self, task: CrawlTask, db):
         """Execute a single crawl task (internal implementation)"""
-        logger.info(f"Executing crawl task: {task.name} ({task.id})")
+        task_id = task.id
+        task_name = task.name
+        logger.info(f"Executing crawl task: {task_name} ({task_id})")
         now = datetime.now(timezone.utc)
-        run = CrawlTaskRun(task_id=task.id, status="running", started_at=now)
+        run = CrawlTaskRun(task_id=task_id, status="running", started_at=now)
         db.add(run)
-        db.flush()
+        run_id = run.id
 
         try:
+            # Persist the run marker before an awaited network fetch. This ends
+            # the initial transaction so permission revocations can commit
+            # while the crawler is waiting on the remote source.
+            db.commit()
+            task = db.query(CrawlTask).filter(CrawlTask.id == task_id).first()
+            if not task:
+                return
             result = await self._executor.execute(task, db)
+            task = db.query(CrawlTask).filter(CrawlTask.id == task_id).first()
+            run = db.query(CrawlTaskRun).filter(CrawlTaskRun.id == run_id).first()
+            if not task or not run:
+                db.rollback()
+                return
 
-            if result.get("error") == "target_collection_deleted":
+            if result.get("error"):
+                task.last_run_at = now
+                task.last_run_status = "failed"
+                task.last_run_result = result
+                task.next_run_at = compute_next_run(task.schedule_type, now)
+                if task.schedule_type == "once":
+                    task.is_enabled = False
                 run.status = "failed"
                 run.result = result
                 run.finished_at = datetime.now(timezone.utc)
@@ -146,24 +167,29 @@ class CrawlScheduler:
 
             db.commit()
             logger.info(
-                f"Crawl task {task.name} completed: "
+                f"Crawl task {task_name} completed: "
                 f"{result.get('new_papers', 0)} new, "
                 f"{result.get('skipped', 0)} skipped, "
                 f"{result.get('updated', 0)} updated"
             )
 
         except Exception as e:
-            logger.error(f"Crawl task {task.name} failed: {e}")
-            task.last_run_at = now
-            task.last_run_status = "failed"
-            task.last_run_result = {"error": str(e)}
-            task.next_run_at = compute_next_run(task.schedule_type, now)
-            if task.schedule_type == "once":
-                task.is_enabled = False
+            logger.error(f"Crawl task {task_name} failed: {e}")
+            db.rollback()
+            task = db.query(CrawlTask).filter(CrawlTask.id == task_id).first()
+            run = db.query(CrawlTaskRun).filter(CrawlTaskRun.id == run_id).first()
+            if task:
+                task.last_run_at = now
+                task.last_run_status = "failed"
+                task.last_run_result = {"error": str(e)}
+                task.next_run_at = compute_next_run(task.schedule_type, now)
+                if task.schedule_type == "once":
+                    task.is_enabled = False
 
-            run.status = "failed"
-            run.result = {"error": str(e)}
-            run.finished_at = datetime.now(timezone.utc)
+            if run:
+                run.status = "failed"
+                run.result = {"error": str(e)}
+                run.finished_at = datetime.now(timezone.utc)
             db.commit()
 
 

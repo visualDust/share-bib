@@ -33,6 +33,7 @@ interface PaperData {
 interface Props {
   visible: boolean;
   paper: PaperData | null;
+  collectionId: string;
   onClose: () => void;
   onSaved: () => void;
 }
@@ -40,6 +41,7 @@ interface Props {
 export default function PaperEditSheet({
   visible,
   paper,
+  collectionId,
   onClose,
   onSaved,
 }: Props) {
@@ -76,16 +78,20 @@ export default function PaperEditSheet({
     if (!paper) return;
     setSaving(true);
     try {
-      await client.put(`/papers/${paper.id}`, {
-        title,
-        summary: summary || null,
-        tags,
-        url_arxiv: urlArxiv || null,
-        url_pdf: urlPdf || null,
-        url_code: urlCode || null,
-        url_project: urlProject || null,
-        status,
-      });
+      await client.put(
+        `/papers/${paper.id}`,
+        {
+          title,
+          summary: summary || null,
+          tags,
+          url_arxiv: urlArxiv || null,
+          url_pdf: urlPdf || null,
+          url_code: urlCode || null,
+          url_project: urlProject || null,
+          status,
+        },
+        { params: { collection_id: collectionId } },
+      );
       Toast.success(t("paperEdit.saveSuccess"));
       onSaved();
       onClose();
