@@ -76,7 +76,10 @@
     "sortUpdated": "Recently Updated",
     "sortCreated": "Recently Created",
     "sortTitle": "Title (A-Z)",
-    "sortCount": "Paper Count"
+    "sortCount": "Paper Count",
+    "layout": "Collection layout",
+    "gridView": "Grid view",
+    "listView": "List view"
   },
   "collection": {
     "loadFailed": "Failed to load collection",
@@ -159,12 +162,22 @@
     "newPassword": "New Password",
     "newPasswordRequired": "Please enter new password",
     "confirmChange": "Confirm",
+    "cancel": "Cancel",
     "passwordChanged": "Password changed successfully",
     "changeFailed": "Change failed",
-    "paperCount": "{{count}} papers"
+    "paperCount": "{{count}} papers",
+    "openCollection": "Open {{title}} in a new tab"
   },
   "admin": {
     "title": "User Management",
+    "subtitle": "Manage account access, credentials, and ownership from one directory.",
+    "summaryLabel": "User summary",
+    "totalUsers": "total",
+    "activeUsers": "active",
+    "directory": "User directory",
+    "directoryCount": "{{count}} accounts",
+    "searchUsers": "Search users",
+    "joined": "Joined",
     "addUser": "Add User",
     "loadFailed": "Failed to load user list",
     "noUsers": "No users",
@@ -210,7 +223,8 @@
     "userDeleted": "User deleted",
     "deleteFailed": "Delete failed",
     "confirmDelete": "Confirm Delete",
-    "save": "Save"
+    "save": "Save",
+    "cancel": "Cancel"
   },
   "paperEdit": {
     "title": "Edit Paper",
@@ -351,6 +365,7 @@
   },
   "settings": {
     "title": "Settings",
+    "appearance": "Appearance",
     "language": "Language",
     "languageAuto": "Follow Browser",
     "languageChinese": "中文",
@@ -434,6 +449,14 @@
   },
   "crawl": {
     "title": "Crawl Tasks",
+    "subtitle": "Schedule repeatable paper discovery and keep collections current.",
+    "taskCount": "{{count}} tasks",
+    "enabledCount": "{{count}} enabled",
+    "lastResult": "Last result",
+    "basics": "Task details",
+    "automation": "Automation",
+    "destination": "Destination",
+    "importBehavior": "Import behavior",
     "newTask": "New Task",
     "noTasks": "No crawl tasks",
     "noTasksHint": "Create a crawl task to automatically fetch new papers",

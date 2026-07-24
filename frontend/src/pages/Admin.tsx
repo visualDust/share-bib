@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
@@ -6,7 +6,6 @@ import {
   Modal,
   Form,
   Toast,
-  Tag,
   Typography,
   Spin,
   Empty,
@@ -22,9 +21,10 @@ import {
   IconSearch,
   IconTick,
   IconClose,
+  IconKey,
 } from "@douyinfe/semi-icons";
 import client from "../api/client";
-import "../styles/glass.css";
+import "../styles/surfaces.css";
 
 const { Title, Text } = Typography;
 
@@ -42,6 +42,7 @@ export default function Admin() {
   const { t } = useTranslation();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
+  const [userQuery, setUserQuery] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
   const [createVisible, setCreateVisible] = useState(false);
   const [resetVisible, setResetVisible] = useState(false);
@@ -73,6 +74,16 @@ export default function Admin() {
   const checkTimerRef = useRef<Record<string, ReturnType<typeof setTimeout>>>(
     {},
   );
+
+  const filteredUsers = useMemo(() => {
+    const query = userQuery.trim().toLowerCase();
+    if (!query) return users;
+    return users.filter((user) =>
+      [user.username, user.display_name, user.email]
+        .filter(Boolean)
+        .some((value) => value!.toLowerCase().includes(query)),
+    );
+  }, [userQuery, users]);
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -299,116 +310,159 @@ export default function Admin() {
     );
 
   return (
-    <div>
-      <div className="home-header">
-        <Title heading={4} style={{ margin: 0 }}>
-          {t("admin.title")}
-        </Title>
-        <Button
-          icon={<IconPlus />}
-          theme="solid"
-          onClick={() => setCreateVisible(true)}
-        >
-          {t("admin.addUser")}
-        </Button>
+    <div className="admin-page">
+      <div className="admin-page-header">
+        <div>
+          <Title heading={3}>{t("admin.title")}</Title>
+          <Text className="admin-page-description">{t("admin.subtitle")}</Text>
+        </div>
+        <div className="admin-counts" aria-label={t("admin.summaryLabel")}>
+          <span>
+            <strong>{users.length}</strong> {t("admin.totalUsers")}
+          </span>
+          <span>
+            <strong>{users.filter((user) => user.is_active).length}</strong>{" "}
+            {t("admin.activeUsers")}
+          </span>
+        </div>
       </div>
 
       {loading ? (
-        <Spin size="large" style={{ display: "block", margin: "80px auto" }} />
+        <div className="admin-loading">
+          <Spin size="large" />
+        </div>
       ) : users.length === 0 ? (
         <Empty description={t("admin.noUsers")} style={{ marginTop: 80 }} />
       ) : (
-        <div className="glass-table-wrapper">
-          <div className="glass-table-header">
-            <span>{t("admin.userList", { count: users.length })}</span>
+        <section className="admin-directory" aria-labelledby="user-directory">
+          <div className="admin-directory-toolbar">
+            <div>
+              <Title id="user-directory" heading={5}>
+                {t("admin.directory")}
+              </Title>
+              <Text>{t("admin.directoryCount", { count: users.length })}</Text>
+            </div>
+            <div className="admin-directory-actions">
+              <Input
+                prefix={<IconSearch />}
+                value={userQuery}
+                onChange={setUserQuery}
+                showClear
+                placeholder={t("admin.searchUsers")}
+                aria-label={t("admin.searchUsers")}
+              />
+              <Button
+                icon={<IconPlus />}
+                theme="solid"
+                onClick={() => setCreateVisible(true)}
+              >
+                {t("admin.addUser")}
+              </Button>
+            </div>
           </div>
-          <div className="glass-table-body">
-            {users.map((u) => (
-              <div key={u.id} className="paper-item">
-                <div className="paper-title-row">
-                  <div style={{ flex: 1 }}>
-                    <Text strong style={{ fontSize: 15 }}>
-                      {u.username}
-                    </Text>
-                    {u.display_name && u.display_name !== u.username && (
-                      <Text type="tertiary" style={{ marginLeft: 8 }}>
-                        {u.display_name}
-                      </Text>
-                    )}
-                    <div className="paper-meta">
-                      {u.email || t("admin.noEmail")} ·{" "}
-                      {new Date(u.created_at).toLocaleDateString()}
+
+          {filteredUsers.length === 0 ? (
+            <div className="admin-no-results">
+              <Empty description={t("admin.noMatchingUsers")} />
+            </div>
+          ) : (
+            <div className="admin-user-list">
+              {filteredUsers.map((u) => (
+                <article key={u.id} className="admin-user-row">
+                  <div className="admin-user-identity">
+                    <div className="admin-user-avatar" aria-hidden="true">
+                      {(u.display_name || u.username).charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <strong>{u.display_name || u.username}</strong>
+                      <span>
+                        {u.display_name && u.display_name !== u.username
+                          ? `@${u.username}`
+                          : u.email || t("admin.noEmail")}
+                      </span>
                     </div>
                   </div>
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: 4,
-                      alignItems: "center",
-                      flexShrink: 0,
-                    }}
-                  >
-                    <Tag size="small" color={u.is_active ? "green" : "red"}>
-                      {u.is_active ? t("admin.active") : t("admin.inactive")}
-                    </Tag>
+                  <div className="admin-user-detail">
+                    <span>{t("admin.email")}</span>
+                    <strong>{u.email || t("admin.noEmail")}</strong>
                   </div>
-                </div>
-                <div className="paper-links">
-                  <Button
-                    size="small"
-                    theme="borderless"
-                    icon={<IconEdit />}
-                    onClick={() => openEditModal(u)}
+                  <div className="admin-user-detail">
+                    <span>{t("admin.joined")}</span>
+                    <strong>
+                      {new Date(u.created_at).toLocaleDateString()}
+                    </strong>
+                  </div>
+                  <span
+                    className={`admin-user-status ${u.is_active ? "is-active" : "is-inactive"}`}
                   >
-                    {t("admin.edit")}
-                  </Button>
-                  <Button
-                    size="small"
-                    theme="borderless"
-                    onClick={() => {
-                      setResetUserId(u.id);
-                      setResetVisible(true);
-                    }}
-                  >
-                    {t("admin.resetPassword")}
-                  </Button>
-                  <Button
-                    size="small"
-                    theme="borderless"
-                    type={u.is_active ? "warning" : "primary"}
-                    onClick={() => handleToggleActive(u.id)}
-                  >
-                    {u.is_active ? t("admin.disable") : t("admin.enable")}
-                  </Button>
-                  <span style={{ flex: 1 }} />
-                  <Button
-                    size="small"
-                    theme="borderless"
-                    type="danger"
-                    icon={<IconDelete />}
-                    onClick={() => openDeleteModal(u.id)}
-                  >
-                    {t("admin.delete")}
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+                    <i aria-hidden="true" />
+                    {u.is_active ? t("admin.active") : t("admin.inactive")}
+                  </span>
+                  <div className="admin-user-actions">
+                    <Button
+                      size="small"
+                      theme="light"
+                      type="tertiary"
+                      icon={<IconEdit />}
+                      onClick={() => openEditModal(u)}
+                    >
+                      {t("admin.edit")}
+                    </Button>
+                    <Button
+                      size="small"
+                      theme="borderless"
+                      type="tertiary"
+                      icon={<IconKey />}
+                      onClick={() => {
+                        setResetUserId(u.id);
+                        setResetVisible(true);
+                      }}
+                    >
+                      {t("admin.resetPassword")}
+                    </Button>
+                    <Button
+                      size="small"
+                      theme="borderless"
+                      type={u.is_active ? "warning" : "primary"}
+                      onClick={() => handleToggleActive(u.id)}
+                    >
+                      {u.is_active ? t("admin.disable") : t("admin.enable")}
+                    </Button>
+                    <Button
+                      size="small"
+                      theme="borderless"
+                      type="danger"
+                      icon={<IconDelete />}
+                      aria-label={`${t("admin.delete")} ${u.username}`}
+                      title={`${t("admin.delete")} ${u.username}`}
+                      onClick={() => openDeleteModal(u.id)}
+                    />
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
       )}
 
       <Modal
+        className="admin-dialog"
         title={t("admin.addUserTitle")}
         visible={createVisible}
         onCancel={() => setCreateVisible(false)}
         footer={
-          <Button
-            theme="solid"
-            loading={submitting}
-            onClick={() => createFormRef.current?.formApi?.submitForm()}
-          >
-            {t("admin.create")}
-          </Button>
+          <div className="admin-dialog-actions">
+            <Button theme="borderless" onClick={() => setCreateVisible(false)}>
+              {t("admin.cancel")}
+            </Button>
+            <Button
+              theme="solid"
+              loading={submitting}
+              onClick={() => createFormRef.current?.formApi?.submitForm()}
+            >
+              {t("admin.create")}
+            </Button>
+          </div>
         }
       >
         <Form ref={createFormRef} onSubmit={handleCreate}>
@@ -429,6 +483,7 @@ export default function Admin() {
       </Modal>
 
       <Modal
+        className="admin-dialog"
         title={t("admin.resetPasswordTitle")}
         visible={resetVisible}
         onCancel={() => {
@@ -436,13 +491,18 @@ export default function Admin() {
           setResetUserId(null);
         }}
         footer={
-          <Button
-            theme="solid"
-            loading={submitting}
-            onClick={() => resetFormRef.current?.formApi?.submitForm()}
-          >
-            {t("admin.confirmReset")}
-          </Button>
+          <div className="admin-dialog-actions">
+            <Button theme="borderless" onClick={() => setResetVisible(false)}>
+              {t("admin.cancel")}
+            </Button>
+            <Button
+              theme="solid"
+              loading={submitting}
+              onClick={() => resetFormRef.current?.formApi?.submitForm()}
+            >
+              {t("admin.confirmReset")}
+            </Button>
+          </div>
         }
       >
         <Form ref={resetFormRef} onSubmit={handleResetPassword}>
@@ -458,6 +518,7 @@ export default function Admin() {
       </Modal>
 
       <Modal
+        className="admin-dialog"
         title={t("admin.editUserTitle")}
         visible={editVisible}
         onCancel={() => {
@@ -465,9 +526,18 @@ export default function Admin() {
           setEditUser(null);
         }}
         footer={
-          <Button theme="solid" loading={submitting} onClick={handleEditSubmit}>
-            {t("admin.save")}
-          </Button>
+          <div className="admin-dialog-actions">
+            <Button theme="borderless" onClick={() => setEditVisible(false)}>
+              {t("admin.cancel")}
+            </Button>
+            <Button
+              theme="solid"
+              loading={submitting}
+              onClick={handleEditSubmit}
+            >
+              {t("admin.save")}
+            </Button>
+          </div>
         }
       >
         {editUser && (
@@ -536,6 +606,7 @@ export default function Admin() {
       </Modal>
 
       <Modal
+        className="admin-dialog admin-delete-dialog"
         title={t("admin.deleteUserTitle")}
         visible={deleteVisible}
         onCancel={() => {
@@ -543,17 +614,22 @@ export default function Admin() {
           setDeleteUserId(null);
         }}
         footer={
-          <Button
-            theme="solid"
-            type="danger"
-            loading={submitting}
-            onClick={handleDelete}
-          >
-            {t("admin.confirmDelete")}
-          </Button>
+          <div className="admin-dialog-actions">
+            <Button theme="borderless" onClick={() => setDeleteVisible(false)}>
+              {t("admin.cancel")}
+            </Button>
+            <Button
+              theme="solid"
+              type="danger"
+              loading={submitting}
+              onClick={handleDelete}
+            >
+              {t("admin.confirmDelete")}
+            </Button>
+          </div>
         }
       >
-        <div style={{ marginBottom: 16 }}>
+        <div className="admin-delete-options">
           <RadioGroup
             value={deleteMode}
             onChange={(e) => {

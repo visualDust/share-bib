@@ -17,7 +17,7 @@ import { IconPlus, IconLink } from "@douyinfe/semi-icons";
 import client from "../api/client";
 import { useInterval } from "../hooks/usePolling";
 import DuplicateReviewModal from "./DuplicateReviewModal";
-import "../styles/glass.css";
+import "../styles/surfaces.css";
 import "../index.css";
 
 const { Title, Text } = Typography;
@@ -242,11 +242,11 @@ export default function AddPapersSheet({
 
   return (
     <SideSheet
+      className="editor-sidesheet"
       title={<Title heading={5}>{t("addPapers.title")}</Title>}
       visible={visible}
       onCancel={handleClose}
-      size={mobile ? "large" : "medium"}
-      width={mobile ? "100vw" : undefined}
+      width={mobile ? "100vw" : 560}
       headerStyle={{ borderBottom: "1px solid var(--semi-color-border)" }}
       bodyStyle={{ borderBottom: "1px solid var(--semi-color-border)" }}
       footer={null}

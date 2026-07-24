@@ -17,7 +17,7 @@ import { IconUpload } from "@douyinfe/semi-icons";
 import client from "../api/client";
 import { useInterval } from "../hooks/usePolling";
 import DuplicateReviewModal from "../components/DuplicateReviewModal";
-import "../styles/glass.css";
+import "../styles/surfaces.css";
 
 const { Title, Text } = Typography;
 
@@ -159,7 +159,7 @@ export default function Import() {
       <Title heading={3} style={{ marginBottom: 24 }}>
         {t("import.title")}
       </Title>
-      <Card className="glass-card">
+      <Card className="surface-card">
         <Upload
           draggable
           accept=".bib"
@@ -229,7 +229,7 @@ export default function Import() {
       </Card>
 
       {result && (
-        <Card className="import-result glass-card">
+        <Card className="import-result surface-card">
           <Title heading={5}>{t("import.resultTitle")}</Title>
           {result.status === "processing" && (
             <div>

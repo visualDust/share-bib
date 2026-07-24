@@ -11,7 +11,7 @@ import {
 import { IconTabs } from "@douyinfe/semi-icons-lab";
 import client from "../api/client";
 import { useSystemStatus } from "../App";
-import "../styles/glass.css";
+import "../styles/surfaces.css";
 
 const { Text } = Typography;
 
@@ -43,6 +43,19 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       .catch(() => {});
   }, []);
 
+  useEffect(() => {
+    const handleProfileUpdate = (event: Event) => {
+      const profile = (event as CustomEvent<{ username?: string }>).detail;
+      if (profile?.username) setUsername(profile.username);
+    };
+    window.addEventListener("sharebib-profile-updated", handleProfileUpdate);
+    return () =>
+      window.removeEventListener(
+        "sharebib-profile-updated",
+        handleProfileUpdate,
+      );
+  }, []);
+
   // Fetch collection title when on collection detail page
   useEffect(() => {
     const match = location.pathname.match(/^\/collections\/([^/]+)$/);
@@ -64,50 +77,42 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="app-layout">
-      <div
-        className="app-header glass-header main-header"
-        style={{
-          backgroundColor:
-            "color-mix(in srgb, var(--semi-color-bg-0) 85%, transparent)",
-          backdropFilter: "blur(16px) saturate(180%)",
-          WebkitBackdropFilter: "blur(16px) saturate(180%)",
-          borderBottom: "1px solid var(--semi-color-border)",
-        }}
-      >
+      <header className="app-header">
         <div className="app-header-left">
-          <IconTabs
-            size="extra-large"
-            className="logo-icon"
+          <button
+            type="button"
+            className="brand-lockup"
             onClick={() => navigate("/")}
-            style={{ cursor: "pointer" }}
-          />
-          {!isMobile && status?.branding && (
-            <Text
-              strong
-              style={{
-                fontSize: "18px",
-                marginLeft: "8px",
-                color: "var(--semi-color-text-0)",
-              }}
-            >
-              {status.branding}
-            </Text>
-          )}
+            aria-label={status?.branding || t("app.title")}
+          >
+            <span className="brand-mark" aria-hidden="true">
+              <IconTabs size="large" />
+            </span>
+            {!isMobile && status?.branding && (
+              <span className="brand-name">{status.branding}</span>
+            )}
+          </button>
           <nav className="header-nav">
             {username && (
               <>
-                <span
+                <button
+                  type="button"
                   className={`header-nav-item${location.pathname === "/" ? " active" : ""}`}
                   onClick={() => navigate("/")}
+                  aria-current={location.pathname === "/" ? "page" : undefined}
                 >
                   {t(isMobile ? "nav.collectionsShort" : "nav.collections")}
-                </span>
-                <span
+                </button>
+                <button
+                  type="button"
                   className={`header-nav-item${location.pathname === "/crawl-tasks" ? " active" : ""}`}
                   onClick={() => navigate("/crawl-tasks")}
+                  aria-current={
+                    location.pathname === "/crawl-tasks" ? "page" : undefined
+                  }
                 >
                   {t(isMobile ? "nav.crawlTasksShort" : "nav.crawlTasks")}
-                </span>
+                </button>
               </>
             )}
           </nav>
@@ -163,7 +168,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               }
             >
               <div className="user-menu-trigger">
-                <Avatar size="small" color="blue">
+                <Avatar size="small" color="grey">
                   {username.charAt(0).toUpperCase()}
                 </Avatar>
                 {!isMobile && (
@@ -175,13 +180,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <Button onClick={() => navigate("/login")}>{t("nav.login")}</Button>
           )}
         </div>
-      </div>
+      </header>
 
       <div className="app-content-wrapper">
-        <div className="content-gradient-overlay">
-          <div className="content-blur-layer" />
-          <div className="content-color-layer" />
-        </div>
         <div className="app-content-main">
           <div className="app-content-inner">{children}</div>
         </div>

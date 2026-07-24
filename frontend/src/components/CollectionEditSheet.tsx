@@ -17,7 +17,7 @@ import {
 import { IconDelete, IconSearch, IconLink } from "@douyinfe/semi-icons";
 import client from "../api/client";
 import CollectionDeduplicationModal from "./CollectionDeduplicationModal";
-import "../styles/glass.css";
+import "../styles/surfaces.css";
 import "../index.css";
 
 const { Title, Text } = Typography;
@@ -224,12 +224,12 @@ export default function CollectionEditSheet({
 
   return (
     <SideSheet
+      className="editor-sidesheet"
       title={<Title heading={5}>{t("collectionEdit.title")}</Title>}
       visible={visible}
       onCancel={onClose}
       footer={footer}
-      size={mobile ? "large" : "small"}
-      width={mobile ? "100vw" : undefined}
+      width={mobile ? "100vw" : 560}
       headerStyle={{ borderBottom: "1px solid var(--semi-color-border)" }}
       bodyStyle={{ borderBottom: "1px solid var(--semi-color-border)" }}
     >

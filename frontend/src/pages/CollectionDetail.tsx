@@ -29,9 +29,9 @@ import client from "../api/client";
 import PaperEditSheet from "../components/PaperEditSheet";
 import CollectionEditSheet from "../components/CollectionEditSheet";
 import AddPapersSheet from "../components/AddPapersSheet";
-import "../styles/glass.css";
+import "../styles/surfaces.css";
 
-const { Text, Paragraph, Title } = Typography;
+const { Paragraph, Title } = Typography;
 
 const isMobile = () => window.innerWidth < 768;
 
@@ -243,7 +243,7 @@ export default function CollectionDetail() {
   }
 
   return (
-    <div>
+    <div className="collection-detail-page">
       <div
         className="collection-detail-actions"
         style={{
@@ -257,6 +257,8 @@ export default function CollectionDetail() {
         <Button
           icon={<IconArrowLeft />}
           theme="borderless"
+          aria-label={isLoggedIn ? t("collection.back") : t("collection.login")}
+          title={isLoggedIn ? t("collection.back") : t("collection.login")}
           onClick={() => (isLoggedIn ? navigate("/") : navigate("/login"))}
           style={mobile ? { minWidth: "auto", padding: "8px 12px" } : undefined}
         >
@@ -272,6 +274,8 @@ export default function CollectionDetail() {
               icon={<IconDownload />}
               theme="solid"
               type="tertiary"
+              aria-label={t("collection.exportBibtex")}
+              title={t("collection.exportBibtex")}
               onClick={handleExportBibtex}
               style={
                 mobile ? { minWidth: "auto", padding: "8px 12px" } : undefined
@@ -285,6 +289,8 @@ export default function CollectionDetail() {
               <Button
                 icon={<IconPlus />}
                 theme="solid"
+                aria-label={t("collection.addPapers")}
+                title={t("collection.addPapers")}
                 onClick={() => setShowAddPapers(true)}
                 style={
                   mobile ? { minWidth: "auto", padding: "8px 12px" } : undefined
@@ -294,8 +300,10 @@ export default function CollectionDetail() {
               </Button>
               <Button
                 icon={<IconSetting />}
-                theme="solid"
-                type="secondary"
+                theme="light"
+                type="tertiary"
+                aria-label={t("collection.editCollection")}
+                title={t("collection.editCollection")}
                 onClick={() => setShowCollectionEdit(true)}
                 style={
                   mobile ? { minWidth: "auto", padding: "8px 12px" } : undefined
@@ -486,169 +494,146 @@ export default function CollectionDetail() {
       {sortedPapers.length === 0 ? (
         <Empty description={t("collection.noPapers")} />
       ) : (
-        <div className="glass-table-wrapper">
-          <div className="glass-table-header">
+        <section className="data-list paper-index">
+          <div className="data-list-header">
             <span>
               {t("collection.paperList", { count: sortedPapers.length })}
             </span>
           </div>
-          <div className="glass-table-body">
-            {sortedPapers.map((paper) => (
-              <div key={paper.id} className="paper-item">
-                <div className="paper-title-row">
-                  <div style={{ flex: 1 }}>
-                    {paper.urls.arxiv || paper.urls.pdf ? (
-                      <a
-                        href={paper.urls.arxiv || paper.urls.pdf || "#"}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{
-                          fontWeight: 500,
-                          fontSize: 15,
-                          color: "var(--semi-color-link)",
-                        }}
+          <div className="data-list-body">
+            {sortedPapers.map((paper, index) => {
+              const primaryUrl = paper.urls.arxiv || paper.urls.pdf;
+              const venue =
+                paper.venue && paper.venue.toLowerCase() !== "unknown"
+                  ? paper.venue
+                  : null;
+
+              return (
+                <article key={paper.id} className="paper-item paper-record">
+                  <div className="paper-record-number" aria-hidden="true">
+                    {String(index + 1).padStart(2, "0")}
+                  </div>
+                  <div className="paper-record-content">
+                    <header className="paper-record-header">
+                      <div className="paper-record-heading">
+                        <div className="paper-kicker">
+                          {paper.year && <span>{paper.year}</span>}
+                          {venue && <span title={venue}>{venue}</span>}
+                          <span>{sourceTagLabel(paper.group_tag)}</span>
+                        </div>
+                        <h3 className="paper-record-title">
+                          {primaryUrl ? (
+                            <a
+                              href={primaryUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              {paper.title}
+                            </a>
+                          ) : (
+                            paper.title
+                          )}
+                        </h3>
+                      </div>
+                      <div
+                        className={`paper-status${paper.status === "accessible" ? " is-accessible" : " is-unavailable"}`}
                       >
-                        {paper.title}
-                      </a>
-                    ) : (
-                      <Text strong style={{ fontSize: 15 }}>
-                        {paper.title}
-                      </Text>
+                        <span aria-hidden="true" />
+                        {paper.status === "accessible"
+                          ? t("collection.statusAccessible")
+                          : t("collection.statusNoAccess")}
+                      </div>
+                    </header>
+
+                    {(paper.authors || []).length > 0 && (
+                      <p className="paper-authors">
+                        {(paper.authors || []).join(", ")}
+                      </p>
                     )}
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 8,
-                        marginTop: 4,
-                        flexWrap: "wrap",
-                      }}
-                    >
-                      {paper.venue && (
-                        <Tag
-                          color="cyan"
-                          size="small"
-                          style={{
-                            fontWeight: 500,
-                            maxWidth: mobile ? "200px" : "300px",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
-                            display: "inline-block",
-                          }}
-                        >
-                          <span title={paper.venue}>{paper.venue}</span>
-                        </Tag>
-                      )}
-                      {paper.year && (
-                        <Tag color="purple" size="small">
-                          {paper.year}
-                        </Tag>
-                      )}
-                    </div>
-                    <div className="paper-meta">
-                      {(paper.authors || []).join(", ")}
-                    </div>
-                  </div>
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: 4,
-                      alignItems: "center",
-                      flexShrink: 0,
-                    }}
-                  >
-                    <Tag size="small" color="blue">
-                      {sourceTagLabel(paper.group_tag)}
-                    </Tag>
-                    <Tag
-                      color={paper.status === "accessible" ? "green" : "grey"}
-                      size="small"
-                    >
-                      {paper.status === "accessible"
-                        ? t("collection.statusAccessible")
-                        : t("collection.statusNoAccess")}
-                    </Tag>
-                  </div>
-                </div>
-                {paper.summary && (
-                  <Paragraph
-                    ellipsis={{ rows: 2, expandable: true }}
-                    style={{
-                      marginTop: 4,
-                      fontSize: 13,
-                      color: "var(--semi-color-text-2)",
-                    }}
-                  >
-                    {paper.summary}
-                  </Paragraph>
-                )}
-                <div className="paper-links">
-                  {paper.urls.arxiv && (
-                    <Button
-                      size="small"
-                      theme="borderless"
-                      icon={<IconLink />}
-                      onClick={() => window.open(paper.urls.arxiv!, "_blank")}
-                    >
-                      arXiv
-                    </Button>
-                  )}
-                  {paper.urls.pdf && (
-                    <Button
-                      size="small"
-                      theme="borderless"
-                      onClick={() => window.open(paper.urls.pdf!, "_blank")}
-                    >
-                      PDF
-                    </Button>
-                  )}
-                  {paper.urls.code && (
-                    <Button
-                      size="small"
-                      theme="borderless"
-                      icon={<IconCode />}
-                      onClick={() => window.open(paper.urls.code!, "_blank")}
-                    >
-                      Code
-                    </Button>
-                  )}
-                  <span style={{ flex: 1 }} />
-                  {canEdit && (
-                    <>
-                      <Button
-                        size="small"
-                        theme="borderless"
-                        icon={<IconEdit />}
-                        onClick={() => setEditingPaper(paper)}
+
+                    {paper.summary && (
+                      <Paragraph
+                        ellipsis={{ rows: 2, expandable: true }}
+                        className="paper-summary"
                       >
-                        {t("collection.edit")}
-                      </Button>
-                      <Button
-                        size="small"
-                        theme="borderless"
-                        type="danger"
-                        icon={<IconDelete />}
-                        onClick={() => setDeletingPaper(paper)}
-                      >
-                        {t("collection.remove")}
-                      </Button>
-                    </>
-                  )}
-                </div>
-                {paper.tags && paper.tags.length > 0 && (
-                  <div className="paper-tags">
-                    {paper.tags.map((tagItem) => (
-                      <Tag key={tagItem} size="small">
-                        {tagItem}
-                      </Tag>
-                    ))}
+                        {paper.summary}
+                      </Paragraph>
+                    )}
+
+                    <footer className="paper-record-footer">
+                      <div className="paper-resources">
+                        {paper.urls.arxiv && (
+                          <a
+                            href={paper.urls.arxiv}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="paper-resource-link"
+                          >
+                            <IconLink aria-hidden="true" />
+                            arXiv
+                          </a>
+                        )}
+                        {paper.urls.pdf && (
+                          <a
+                            href={paper.urls.pdf}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="paper-resource-link"
+                          >
+                            PDF
+                          </a>
+                        )}
+                        {paper.urls.code && (
+                          <a
+                            href={paper.urls.code}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="paper-resource-link"
+                          >
+                            <IconCode aria-hidden="true" />
+                            Code
+                          </a>
+                        )}
+                      </div>
+
+                      {paper.tags && paper.tags.length > 0 && (
+                        <div className="paper-tags">
+                          {paper.tags.map((tagItem) => (
+                            <Tag key={tagItem} size="small">
+                              {tagItem}
+                            </Tag>
+                          ))}
+                        </div>
+                      )}
+
+                      {canEdit && (
+                        <div className="paper-management">
+                          <Button
+                            size="small"
+                            theme="borderless"
+                            icon={<IconEdit />}
+                            onClick={() => setEditingPaper(paper)}
+                          >
+                            {t("collection.edit")}
+                          </Button>
+                          <Button
+                            size="small"
+                            theme="borderless"
+                            type="danger"
+                            icon={<IconDelete />}
+                            onClick={() => setDeletingPaper(paper)}
+                          >
+                            {t("collection.remove")}
+                          </Button>
+                        </div>
+                      )}
+                    </footer>
                   </div>
-                )}
-              </div>
-            ))}
+                </article>
+              );
+            })}
           </div>
-        </div>
+        </section>
       )}
 
       <PaperEditSheet

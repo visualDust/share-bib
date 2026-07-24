@@ -5,7 +5,7 @@ import { Card, Form, Button, Toast } from "@douyinfe/semi-ui-19";
 import LanguageSwitcher from "../components/LanguageSwitcher";
 import { useSystemStatus } from "../App";
 import client from "../api/client";
-import "../styles/glass.css";
+import "../styles/surfaces.css";
 
 export default function Login() {
   const [loading, setLoading] = useState(false);
@@ -44,7 +44,7 @@ export default function Login() {
 
   return (
     <div className="login-container">
-      <Card className="login-card glass-login">
+      <Card className="login-card auth-card">
         <div
           style={{
             display: "flex",

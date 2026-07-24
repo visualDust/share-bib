@@ -16,9 +16,13 @@ import {
   IconArrowLeft,
   IconEdit,
   IconExternalOpen,
+  IconKey,
 } from "@douyinfe/semi-icons";
 import client from "../api/client";
-import "../styles/glass.css";
+import ProfileEditModal, {
+  type EditableProfile,
+} from "../components/ProfileEditModal";
+import "../styles/surfaces.css";
 
 const { Text, Paragraph, Title } = Typography;
 
@@ -48,6 +52,14 @@ const visibilityColors: Record<string, string> = {
   private: "grey",
   shared: "blue",
   public: "green",
+  public_editable: "green",
+};
+
+const visibilityLabels: Record<string, string> = {
+  private: "collectionEdit.private",
+  shared: "collectionEdit.shared",
+  public: "collectionEdit.public",
+  public_editable: "collectionEdit.publicEditable",
 };
 
 export default function UserProfilePage() {
@@ -56,7 +68,8 @@ export default function UserProfilePage() {
   const { t } = useTranslation();
   const [data, setData] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [currentUsername, setCurrentUsername] = useState<string | null>(null);
+  const [currentUser, setCurrentUser] = useState<EditableProfile | null>(null);
+  const [profileVisible, setProfileVisible] = useState(false);
   const [pwdVisible, setPwdVisible] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const pwdFormRef = useRef<any>(null);
@@ -64,7 +77,7 @@ export default function UserProfilePage() {
   useEffect(() => {
     client
       .get("/auth/me")
-      .then((res) => setCurrentUsername(res.data.username))
+      .then((res) => setCurrentUser(res.data))
       .catch(() => {});
   }, []);
 
@@ -90,7 +103,7 @@ export default function UserProfilePage() {
     );
 
   const displayName = data.user.display_name || data.user.username;
-  const isOwnProfile = currentUsername === data.user.username;
+  const isOwnProfile = currentUser?.username === data.user.username;
 
   const handleChangePassword = async (values: {
     old_password: string;
@@ -109,50 +122,70 @@ export default function UserProfilePage() {
   };
 
   return (
-    <div>
+    <div className="profile-page">
       <Button
+        className="profile-back"
         icon={<IconArrowLeft />}
         theme="borderless"
         onClick={() => navigate("/")}
-        style={{ marginBottom: 16 }}
       >
         {t("userProfile.back")}
       </Button>
 
-      <div style={{ marginBottom: 24 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+      <header className="profile-header">
+        <div className="profile-identity">
           <Title heading={3}>{displayName}</Title>
-          {isOwnProfile && (
+          <div className="profile-meta">
+            <Text type="tertiary">@{data.user.username}</Text>
+            {isOwnProfile && currentUser?.email && (
+              <>
+                <span aria-hidden="true" />
+                <Text type="tertiary">{currentUser.email}</Text>
+              </>
+            )}
+            <span aria-hidden="true" />
+            <Text type="tertiary">
+              {t("userProfile.joinedAt", {
+                date: new Date(data.user.created_at).toLocaleDateString(),
+              })}
+            </Text>
+          </div>
+        </div>
+        {isOwnProfile && (
+          <div className="profile-account-actions">
             <Button
-              size="small"
               icon={<IconEdit />}
               theme="light"
+              onClick={() => setProfileVisible(true)}
+            >
+              {t("settings.editProfile")}
+            </Button>
+            <Button
+              icon={<IconKey />}
+              theme="borderless"
+              type="tertiary"
               onClick={() => setPwdVisible(true)}
             >
               {t("userProfile.changePassword")}
             </Button>
-          )}
-        </div>
-        <Text type="tertiary">@{data.user.username}</Text>
-        <Text type="tertiary" style={{ marginLeft: 12 }}>
-          {t("userProfile.joinedAt", {
-            date: new Date(data.user.created_at).toLocaleDateString(),
-          })}
-        </Text>
-      </div>
+          </div>
+        )}
+      </header>
 
-      <Title heading={5} style={{ marginBottom: 16 }}>
-        {t("userProfile.collections", { count: data.collections.length })}
-      </Title>
+      <div className="profile-section-heading">
+        <Title heading={5}>
+          {t("userProfile.collections", { count: data.collections.length })}
+        </Title>
+      </div>
 
       {data.collections.length === 0 ? (
         <Empty description={t("userProfile.noCollections")} />
       ) : (
-        <div className="collection-grid">
+        <div className="collection-grid collection-index">
           {data.collections.map((c) => (
             <div key={c.id} onClick={() => navigate(`/collections/${c.id}`)}>
               <Card
-                className="collection-card glass-card"
+                className="collection-card collection-index-card surface-card"
                 style={{ cursor: "pointer" }}
               >
                 <div className="collection-card-header">
@@ -163,7 +196,7 @@ export default function UserProfilePage() {
                     color={(visibilityColors[c.visibility] || "grey") as any}
                     size="small"
                   >
-                    {c.visibility}
+                    {t(visibilityLabels[c.visibility] || c.visibility)}
                   </Tag>
                 </div>
                 {c.description && (
@@ -198,6 +231,12 @@ export default function UserProfilePage() {
                       theme="borderless"
                       size="small"
                       type="tertiary"
+                      aria-label={t("userProfile.openCollection", {
+                        title: c.title,
+                      })}
+                      title={t("userProfile.openCollection", {
+                        title: c.title,
+                      })}
                       style={{ padding: 2, height: "auto" }}
                       onClick={(e) => {
                         e.stopPropagation();
@@ -212,18 +251,49 @@ export default function UserProfilePage() {
         </div>
       )}
 
+      <ProfileEditModal
+        visible={profileVisible}
+        user={currentUser}
+        onClose={() => setProfileVisible(false)}
+        onUpdated={(profile) => {
+          setCurrentUser(profile);
+          setData((current) =>
+            current
+              ? {
+                  ...current,
+                  user: {
+                    ...current.user,
+                    username: profile.username,
+                    display_name: profile.display_name,
+                  },
+                }
+              : current,
+          );
+          if (profile.username !== username) {
+            navigate(`/user/${profile.username}`, { replace: true });
+          }
+        }}
+      />
+
       <Modal
+        className="profile-password-dialog"
         title={t("userProfile.changePasswordTitle")}
         visible={pwdVisible}
         onCancel={() => setPwdVisible(false)}
+        width={480}
         footer={
-          <Button
-            theme="solid"
-            loading={submitting}
-            onClick={() => pwdFormRef.current?.formApi?.submitForm()}
-          >
-            {t("userProfile.confirmChange")}
-          </Button>
+          <div className="profile-dialog-actions">
+            <Button theme="borderless" onClick={() => setPwdVisible(false)}>
+              {t("userProfile.cancel")}
+            </Button>
+            <Button
+              theme="solid"
+              loading={submitting}
+              onClick={() => pwdFormRef.current?.formApi?.submitForm()}
+            >
+              {t("userProfile.confirmChange")}
+            </Button>
+          </div>
         }
       >
         <Form ref={pwdFormRef} onSubmit={handleChangePassword}>

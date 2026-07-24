@@ -5,7 +5,7 @@ import { Card, Form, Button, Toast, Typography } from "@douyinfe/semi-ui-19";
 import LanguageSwitcher from "../components/LanguageSwitcher";
 import { useSystemStatus } from "../App";
 import client from "../api/client";
-import "../styles/glass.css";
+import "../styles/surfaces.css";
 
 const { Text } = Typography;
 
@@ -61,7 +61,7 @@ export default function Setup() {
 
   return (
     <div className="login-container">
-      <Card className="login-card glass-login">
+      <Card className="login-card auth-card">
         <div
           style={{
             display: "flex",

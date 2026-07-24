@@ -16,14 +16,13 @@ import {
 } from "@douyinfe/semi-ui-19";
 import {
   IconArrowLeft,
-  IconTick,
-  IconClose,
   IconDelete,
   IconHelpCircle,
 } from "@douyinfe/semi-icons";
 import client from "../api/client";
 import { useSystemStatus } from "../App";
-import "../styles/glass.css";
+import ProfileEditModal from "../components/ProfileEditModal";
+import "../styles/surfaces.css";
 
 const { Title, Text } = Typography;
 
@@ -71,18 +70,6 @@ export default function Settings() {
 
   // Profile modal
   const [profileVisible, setProfileVisible] = useState(false);
-  const [profileSubmitting, setProfileSubmitting] = useState(false);
-  const [profileForm, setProfileForm] = useState({
-    username: "",
-    display_name: "",
-    email: "",
-  });
-  const [profileErrors, setProfileErrors] = useState<Record<string, string>>(
-    {},
-  );
-  const checkTimerRef = useRef<Record<string, ReturnType<typeof setTimeout>>>(
-    {},
-  );
 
   // API Keys
   const [apiKeys, setApiKeys] = useState<ApiKeySetting[]>([]);
@@ -117,11 +104,6 @@ export default function Settings() {
       .get("/auth/me")
       .then((res) => {
         setUserInfo(res.data);
-        setProfileForm({
-          username: res.data.username,
-          display_name: res.data.display_name || "",
-          email: res.data.email || "",
-        });
       })
       .catch(() => navigate("/login"))
       .finally(() => setLoading(false));
@@ -218,63 +200,6 @@ export default function Settings() {
     }
   };
 
-  const checkField = (field: string, value: string) => {
-    if (checkTimerRef.current[field])
-      clearTimeout(checkTimerRef.current[field]);
-    if (!value) {
-      setProfileErrors((prev) => {
-        const n = { ...prev };
-        delete n[field];
-        return n;
-      });
-      return;
-    }
-    if (field === "username" && value === userInfo?.username) {
-      setProfileErrors((prev) => {
-        const n = { ...prev };
-        delete n[field];
-        return n;
-      });
-      return;
-    }
-    if (field === "email" && value === (userInfo?.email || "")) {
-      setProfileErrors((prev) => {
-        const n = { ...prev };
-        delete n[field];
-        return n;
-      });
-      return;
-    }
-    checkTimerRef.current[field] = setTimeout(async () => {
-      try {
-        const res = await client.get("/users/me/check", {
-          params: { field, value },
-        });
-        setProfileErrors((prev) => {
-          const n = { ...prev };
-          if (res.data.available) {
-            delete n[field];
-          } else {
-            n[field] =
-              field === "username"
-                ? t("settings.usernameConflict")
-                : t("settings.emailConflict");
-          }
-          return n;
-        });
-      } catch {
-        /* ignore */
-      }
-    }, 300);
-  };
-
-  const handleProfileFieldChange = (field: string, value: string) => {
-    setProfileForm((prev) => ({ ...prev, [field]: value }));
-    if (field === "username" || field === "email") {
-      checkField(field, value);
-    }
-  };
-
   const handleApiKeySave = async (key: string) => {
     try {
       await client.put("/user-settings", { key, value: editingValue });
@@ -335,44 +260,13 @@ export default function Settings() {
     }
   };
 
-  const handleProfileSubmit = async () => {
-    if (Object.keys(profileErrors).length > 0) {
-      Toast.warning(t("admin.fixConflicts"));
-      return;
-    }
-    if (!profileForm.username) {
-      Toast.warning(t("settings.usernameRequired"));
-      return;
-    }
-    setProfileSubmitting(true);
-    try {
-      await client.put("/users/me", {
-        username: profileForm.username,
-        display_name: profileForm.display_name || null,
-        email: profileForm.email || null,
-      });
-      Toast.success(t("settings.saveSuccess"));
-      setUserInfo({
-        username: profileForm.username,
-        display_name: profileForm.display_name || null,
-        email: profileForm.email || null,
-        is_admin: userInfo?.is_admin || false,
-      });
-      setProfileVisible(false);
-    } catch (err: any) {
-      Toast.error(err.response?.data?.detail || t("settings.saveFailed"));
-    } finally {
-      setProfileSubmitting(false);
-    }
-  };
-
   if (loading)
     return (
       <Spin size="large" style={{ display: "block", margin: "100px auto" }} />
     );
 
   return (
-    <div>
+    <div className="settings-page">
       <Button
         icon={<IconArrowLeft />}
         theme="borderless"
@@ -386,357 +280,379 @@ export default function Settings() {
         {t("settings.title")}
       </Title>
 
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: 16,
-          maxWidth: 600,
-        }}
-      >
-        <Card className="glass-card">
-          <div style={{ marginBottom: 16 }}>
-            <label className="form-label">{t("settings.language")}</label>
-            <Select
-              value={language}
-              onChange={(v) => handleLanguageChange(v as string)}
-              style={{ width: "100%" }}
-            >
-              <Select.Option value="auto">
-                {t("settings.languageAuto")}
-              </Select.Option>
-              <Select.Option value="zh">
-                {t("settings.languageChinese")}
-              </Select.Option>
-              <Select.Option value="en">
-                {t("settings.languageEnglish")}
-              </Select.Option>
-            </Select>
-          </div>
-          <div>
-            <label className="form-label">{t("settings.theme")}</label>
-            <RadioGroup
-              type="button"
-              buttonSize="middle"
-              value={theme}
-              onChange={(e) => handleThemeChange(e.target.value)}
-              style={{ width: "100%" }}
-            >
-              <Radio value="auto">{t("settings.themeAuto")}</Radio>
-              <Radio value="light">{t("settings.themeLight")}</Radio>
-              <Radio value="dark">{t("settings.themeDark")}</Radio>
-            </RadioGroup>
-          </div>
-        </Card>
+      <div className="settings-shell">
+        <nav className="settings-nav" aria-label={t("settings.title")}>
+          <a href="#settings-appearance">{t("settings.appearance")}</a>
+          <a href="#settings-account">{t("settings.account")}</a>
+          {userInfo?.is_admin && (
+            <a href="#settings-branding">{t("settings.branding")}</a>
+          )}
+          <a href="#settings-sdk-keys">{t("settings.sdkApiKeys")}</a>
+          <a href="#settings-crawl-keys">{t("settings.apiKeys")}</a>
+        </nav>
 
-        <Card className="glass-card">
-          <Title heading={5} style={{ marginBottom: 16 }}>
-            {t("settings.account")}
-          </Title>
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
-              <div>
-                <Text strong>{t("settings.username")}</Text>
-                <div>
-                  <Text type="tertiary">{userInfo?.username}</Text>
-                </div>
+        <div className="settings-sections">
+          <section id="settings-appearance">
+            <Card className="surface-card">
+              <Title heading={5} style={{ marginBottom: 16 }}>
+                {t("settings.appearance")}
+              </Title>
+              <div style={{ marginBottom: 16 }}>
+                <label className="form-label">{t("settings.language")}</label>
+                <Select
+                  value={language}
+                  onChange={(v) => handleLanguageChange(v as string)}
+                  style={{ width: "100%" }}
+                >
+                  <Select.Option value="auto">
+                    {t("settings.languageAuto")}
+                  </Select.Option>
+                  <Select.Option value="zh">
+                    {t("settings.languageChinese")}
+                  </Select.Option>
+                  <Select.Option value="en">
+                    {t("settings.languageEnglish")}
+                  </Select.Option>
+                </Select>
               </div>
-            </div>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
               <div>
-                <Text strong>{t("settings.displayName")}</Text>
-                <div>
-                  <Text type="tertiary">{userInfo?.display_name || "-"}</Text>
-                </div>
+                <label className="form-label">{t("settings.theme")}</label>
+                <RadioGroup
+                  type="button"
+                  buttonSize="middle"
+                  value={theme}
+                  onChange={(e) => handleThemeChange(e.target.value)}
+                  style={{ width: "100%" }}
+                >
+                  <Radio value="auto">{t("settings.themeAuto")}</Radio>
+                  <Radio value="light">{t("settings.themeLight")}</Radio>
+                  <Radio value="dark">{t("settings.themeDark")}</Radio>
+                </RadioGroup>
               </div>
-            </div>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
-              <div>
-                <Text strong>{t("settings.email")}</Text>
-                <div>
-                  <Text type="tertiary">{userInfo?.email || "-"}</Text>
-                </div>
-              </div>
-            </div>
-            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-              <Button theme="solid" onClick={() => setProfileVisible(true)}>
-                {t("settings.editProfile")}
-              </Button>
-              <Button onClick={() => setPwdVisible(true)}>
-                {t("settings.changePassword")}
-              </Button>
-            </div>
-          </div>
-        </Card>
+            </Card>
+          </section>
 
-        {userInfo?.is_admin && (
-          <Card className="glass-card">
-            <Title heading={5} style={{ marginBottom: 4 }}>
-              {t("settings.branding")}
-            </Title>
-            <Text
-              type="tertiary"
-              style={{ fontSize: 13, display: "block", marginBottom: 16 }}
-            >
-              {t("settings.brandingDesc")}
-            </Text>
-            <div style={{ display: "flex", gap: 8 }}>
-              <Input
-                style={{ flex: 1 }}
-                value={branding}
-                onChange={(v) => setBranding(v)}
-                placeholder="ShareBib"
-              />
-              <Button
-                theme="solid"
-                onClick={handleBrandingUpdate}
-                loading={brandingSubmitting}
-                disabled={!branding.trim() || branding === status?.branding}
-              >
-                {t("settings.save")}
-              </Button>
-            </div>
-          </Card>
-        )}
-
-        <Card className="glass-card">
-          <Title heading={5} style={{ marginBottom: 4 }}>
-            {t("settings.sdkApiKeys")}
-          </Title>
-          <Text
-            type="tertiary"
-            style={{ fontSize: 13, display: "block", marginBottom: 16 }}
-          >
-            {t("settings.sdkApiKeysDesc")}
-          </Text>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              marginBottom: 16,
-              flexWrap: "wrap",
-            }}
-          >
-            <Button
-              theme="solid"
-              size="small"
-              onClick={() => setCreateKeyVisible(true)}
-            >
-              {t("settings.createApiKey")}
-            </Button>
-            <Button
-              icon={<IconHelpCircle style={{ fontSize: 13 }} />}
-              theme="borderless"
-              size="small"
-              type="tertiary"
-              style={{
-                padding: 0,
-                height: "auto",
-                fontSize: 12,
-                fontWeight: 400,
-                color: "var(--semi-color-text-2)",
-                textDecoration: "underline",
-              }}
-              onClick={() => setAgentGuideVisible(true)}
-            >
-              {t("settings.agentGuideLink")}
-            </Button>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {userApiKeys.map((key) => (
+          <section id="settings-account">
+            <Card className="surface-card">
+              <Title heading={5} style={{ marginBottom: 16 }}>
+                {t("settings.account")}
+              </Title>
               <div
-                key={key.id}
-                style={{
-                  padding: 12,
-                  border: "1px solid var(--semi-color-border)",
-                  borderRadius: 8,
-                }}
+                style={{ display: "flex", flexDirection: "column", gap: 12 }}
               >
                 <div
                   style={{
                     display: "flex",
                     justifyContent: "space-between",
                     alignItems: "center",
-                    marginBottom: 8,
                   }}
                 >
-                  <Text strong>{key.name}</Text>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <Button
-                      size="small"
-                      onClick={() => handleToggleUserApiKey(key.id)}
-                    >
-                      {key.is_active
-                        ? t("settings.deactivate")
-                        : t("settings.activate")}
-                    </Button>
-                    <Button
-                      size="small"
-                      type="danger"
-                      icon={<IconDelete />}
-                      onClick={() => handleDeleteUserApiKey(key.id)}
-                    />
+                  <div>
+                    <Text strong>{t("settings.username")}</Text>
+                    <div>
+                      <Text type="tertiary">{userInfo?.username}</Text>
+                    </div>
                   </div>
                 </div>
                 <div
-                  style={{ display: "flex", flexDirection: "column", gap: 4 }}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  }}
                 >
-                  <Text type="tertiary" style={{ fontSize: 12 }}>
-                    {t("settings.keyPrefix")}: {key.key_prefix}...
-                  </Text>
-                  <Text type="tertiary" style={{ fontSize: 12 }}>
-                    {t("settings.status")}:{" "}
-                    <Text
-                      type={key.is_active ? "success" : "tertiary"}
-                      style={{ fontSize: 12 }}
-                    >
-                      {key.is_active
-                        ? t("settings.active")
-                        : t("settings.inactive")}
-                    </Text>
-                  </Text>
-                  {key.last_used_at && (
-                    <Text type="tertiary" style={{ fontSize: 12 }}>
-                      {t("settings.lastUsed")}:{" "}
-                      {new Date(key.last_used_at).toLocaleString()}
-                    </Text>
-                  )}
-                  <Text type="tertiary" style={{ fontSize: 12 }}>
-                    {t("settings.created")}:{" "}
-                    {new Date(key.created_at).toLocaleString()}
-                  </Text>
+                  <div>
+                    <Text strong>{t("settings.displayName")}</Text>
+                    <div>
+                      <Text type="tertiary">
+                        {userInfo?.display_name || "-"}
+                      </Text>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ))}
-            {userApiKeys.length === 0 && (
-              <Text
-                type="tertiary"
-                style={{ textAlign: "center", padding: 16 }}
-              >
-                {t("settings.noApiKeys")}
-              </Text>
-            )}
-          </div>
-        </Card>
-
-        <Card className="glass-card">
-          <Title heading={5} style={{ marginBottom: 4 }}>
-            {t("settings.apiKeys")}
-          </Title>
-          <Text
-            type="tertiary"
-            style={{ fontSize: 13, display: "block", marginBottom: 16 }}
-          >
-            {t("settings.apiKeysDesc")}
-          </Text>
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            {apiKeys.map((item) => (
-              <div key={item.key}>
                 <div
                   style={{
                     display: "flex",
                     justifyContent: "space-between",
                     alignItems: "center",
-                    marginBottom: 4,
                   }}
                 >
-                  <Text strong>
-                    {t(`settings.apiKeyLabel.${item.key}`, item.key)}
-                  </Text>
-                  <Text
-                    type={item.is_set ? "success" : "tertiary"}
-                    style={{ fontSize: 12 }}
-                  >
-                    {item.is_set
-                      ? t("settings.apiKeySet")
-                      : t("settings.apiKeyNotSet")}
-                  </Text>
+                  <div>
+                    <Text strong>{t("settings.email")}</Text>
+                    <div>
+                      <Text type="tertiary">{userInfo?.email || "-"}</Text>
+                    </div>
+                  </div>
                 </div>
+                <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                  <Button theme="solid" onClick={() => setProfileVisible(true)}>
+                    {t("settings.editProfile")}
+                  </Button>
+                  <Button onClick={() => setPwdVisible(true)}>
+                    {t("settings.changePassword")}
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          </section>
+
+          {userInfo?.is_admin && (
+            <section id="settings-branding">
+              <Card className="surface-card">
+                <Title heading={5} style={{ marginBottom: 4 }}>
+                  {t("settings.branding")}
+                </Title>
                 <Text
                   type="tertiary"
-                  style={{ fontSize: 12, display: "block", marginBottom: 6 }}
+                  style={{ fontSize: 13, display: "block", marginBottom: 16 }}
                 >
-                  {t(`settings.apiKeyHint.${item.key}`, "")}
+                  {t("settings.brandingDesc")}
                 </Text>
-                {editingKey === item.key ? (
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <Input
-                      style={{ flex: 1 }}
-                      value={editingValue}
-                      onChange={(v) => setEditingValue(v)}
-                      placeholder={t("settings.apiKeyPlaceholder")}
-                      mode="password"
-                    />
-                    <Button
-                      theme="solid"
-                      size="small"
-                      onClick={() => handleApiKeySave(item.key)}
-                      disabled={!editingValue}
-                    >
-                      {t("settings.save")}
-                    </Button>
-                    <Button
-                      size="small"
-                      onClick={() => {
-                        setEditingKey(null);
-                        setEditingValue("");
-                      }}
-                    >
-                      {t("settings.cancel")}
-                    </Button>
-                  </div>
-                ) : (
-                  <div
-                    style={{ display: "flex", gap: 8, alignItems: "center" }}
+                <div style={{ display: "flex", gap: 8 }}>
+                  <Input
+                    style={{ flex: 1 }}
+                    value={branding}
+                    onChange={(v) => setBranding(v)}
+                    placeholder="ShareBib"
+                  />
+                  <Button
+                    theme="solid"
+                    onClick={handleBrandingUpdate}
+                    loading={brandingSubmitting}
+                    disabled={!branding.trim() || branding === status?.branding}
                   >
-                    <Input
-                      style={{ flex: 1 }}
-                      value={item.value}
-                      disabled
-                      placeholder={t("settings.apiKeyNotSet")}
-                    />
-                    <Button
-                      size="small"
-                      onClick={() => {
-                        setEditingKey(item.key);
-                        setEditingValue("");
-                      }}
-                    >
-                      {item.is_set ? t("settings.edit") : t("settings.set")}
-                    </Button>
-                    {item.is_set && (
+                    {t("settings.save")}
+                  </Button>
+                </div>
+              </Card>
+            </section>
+          )}
+
+          <section id="settings-sdk-keys">
+            <Card className="surface-card">
+              <Title heading={5} style={{ marginBottom: 4 }}>
+                {t("settings.sdkApiKeys")}
+              </Title>
+              <Text
+                type="tertiary"
+                style={{ fontSize: 13, display: "block", marginBottom: 16 }}
+              >
+                {t("settings.sdkApiKeysDesc")}
+              </Text>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  marginBottom: 16,
+                  flexWrap: "wrap",
+                }}
+              >
+                <Button
+                  theme="solid"
+                  size="small"
+                  onClick={() => setCreateKeyVisible(true)}
+                >
+                  {t("settings.createApiKey")}
+                </Button>
+                <Button
+                  icon={<IconHelpCircle style={{ fontSize: 13 }} />}
+                  theme="borderless"
+                  size="small"
+                  type="tertiary"
+                  style={{
+                    padding: 0,
+                    height: "auto",
+                    fontSize: 12,
+                    fontWeight: 400,
+                    color: "var(--semi-color-text-2)",
+                    textDecoration: "underline",
+                  }}
+                  onClick={() => setAgentGuideVisible(true)}
+                >
+                  {t("settings.agentGuideLink")}
+                </Button>
+              </div>
+              <div className="api-key-list">
+                {userApiKeys.map((key) => (
+                  <article key={key.id} className="api-key-record">
+                    <div className="api-key-record-main">
+                      <div className="api-key-record-title">
+                        <Text strong>{key.name}</Text>
+                        <span
+                          className={`api-key-status${key.is_active ? " is-active" : ""}`}
+                        >
+                          <span aria-hidden="true" />
+                          {key.is_active
+                            ? t("settings.active")
+                            : t("settings.inactive")}
+                        </span>
+                      </div>
+                      <dl className="api-key-meta">
+                        <div>
+                          <dt>{t("settings.keyPrefix")}</dt>
+                          <dd>
+                            <code>{key.key_prefix}…</code>
+                          </dd>
+                        </div>
+                        {key.last_used_at && (
+                          <div>
+                            <dt>{t("settings.lastUsed")}</dt>
+                            <dd>
+                              {new Date(key.last_used_at).toLocaleString()}
+                            </dd>
+                          </div>
+                        )}
+                        <div>
+                          <dt>{t("settings.created")}</dt>
+                          <dd>{new Date(key.created_at).toLocaleString()}</dd>
+                        </div>
+                      </dl>
+                    </div>
+                    <div className="api-key-actions">
+                      <Button
+                        size="small"
+                        onClick={() => handleToggleUserApiKey(key.id)}
+                      >
+                        {key.is_active
+                          ? t("settings.deactivate")
+                          : t("settings.activate")}
+                      </Button>
                       <Button
                         size="small"
                         type="danger"
                         icon={<IconDelete />}
-                        onClick={() => handleApiKeyDelete(item.key)}
+                        aria-label={t("admin.delete")}
+                        title={t("admin.delete")}
+                        onClick={() => handleDeleteUserApiKey(key.id)}
                       />
-                    )}
-                  </div>
+                    </div>
+                  </article>
+                ))}
+                {userApiKeys.length === 0 && (
+                  <Text
+                    type="tertiary"
+                    style={{ textAlign: "center", padding: 16 }}
+                  >
+                    {t("settings.noApiKeys")}
+                  </Text>
                 )}
               </div>
-            ))}
-          </div>
-        </Card>
+            </Card>
+          </section>
+
+          <section id="settings-crawl-keys">
+            <Card className="surface-card">
+              <Title heading={5} style={{ marginBottom: 4 }}>
+                {t("settings.apiKeys")}
+              </Title>
+              <Text
+                type="tertiary"
+                style={{ fontSize: 13, display: "block", marginBottom: 16 }}
+              >
+                {t("settings.apiKeysDesc")}
+              </Text>
+              <div
+                style={{ display: "flex", flexDirection: "column", gap: 16 }}
+              >
+                {apiKeys.map((item) => (
+                  <div key={item.key}>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        marginBottom: 4,
+                      }}
+                    >
+                      <Text strong>
+                        {t(`settings.apiKeyLabel.${item.key}`, item.key)}
+                      </Text>
+                      <Text
+                        type={item.is_set ? "success" : "tertiary"}
+                        style={{ fontSize: 12 }}
+                      >
+                        {item.is_set
+                          ? t("settings.apiKeySet")
+                          : t("settings.apiKeyNotSet")}
+                      </Text>
+                    </div>
+                    <Text
+                      type="tertiary"
+                      style={{
+                        fontSize: 12,
+                        display: "block",
+                        marginBottom: 6,
+                      }}
+                    >
+                      {t(`settings.apiKeyHint.${item.key}`, "")}
+                    </Text>
+                    {editingKey === item.key ? (
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <Input
+                          style={{ flex: 1 }}
+                          value={editingValue}
+                          onChange={(v) => setEditingValue(v)}
+                          placeholder={t("settings.apiKeyPlaceholder")}
+                          mode="password"
+                        />
+                        <Button
+                          theme="solid"
+                          size="small"
+                          onClick={() => handleApiKeySave(item.key)}
+                          disabled={!editingValue}
+                        >
+                          {t("settings.save")}
+                        </Button>
+                        <Button
+                          size="small"
+                          onClick={() => {
+                            setEditingKey(null);
+                            setEditingValue("");
+                          }}
+                        >
+                          {t("settings.cancel")}
+                        </Button>
+                      </div>
+                    ) : (
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: 8,
+                          alignItems: "center",
+                        }}
+                      >
+                        <Input
+                          style={{ flex: 1 }}
+                          value={item.value}
+                          disabled
+                          placeholder={t("settings.apiKeyNotSet")}
+                        />
+                        <Button
+                          size="small"
+                          onClick={() => {
+                            setEditingKey(item.key);
+                            setEditingValue("");
+                          }}
+                        >
+                          {item.is_set ? t("settings.edit") : t("settings.set")}
+                        </Button>
+                        {item.is_set && (
+                          <Button
+                            size="small"
+                            type="danger"
+                            icon={<IconDelete />}
+                            onClick={() => handleApiKeyDelete(item.key)}
+                          />
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </Card>
+          </section>
+        </div>
       </div>
 
       {/* Change Password Modal */}
@@ -801,96 +717,16 @@ export default function Settings() {
         </Form>
       </Modal>
 
-      {/* Edit Profile Modal */}
-      <Modal
-        title={t("settings.editProfile")}
+      <ProfileEditModal
         visible={profileVisible}
-        onCancel={() => {
-          setProfileVisible(false);
-          setProfileErrors({});
+        user={userInfo}
+        onClose={() => setProfileVisible(false)}
+        onUpdated={(profile) => {
+          setUserInfo((current) =>
+            current ? { ...current, ...profile } : null,
+          );
         }}
-        footer={
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-            <Button
-              onClick={() => {
-                setProfileVisible(false);
-                setProfileErrors({});
-              }}
-            >
-              {t("settings.cancel")}
-            </Button>
-            <Button
-              theme="solid"
-              loading={profileSubmitting}
-              onClick={handleProfileSubmit}
-            >
-              {t("settings.save")}
-            </Button>
-          </div>
-        }
-      >
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <div>
-            <label className="form-label">{t("settings.username")}</label>
-            <Input
-              value={profileForm.username}
-              onChange={(v) => handleProfileFieldChange("username", v)}
-              suffix={
-                profileErrors.username ? (
-                  <IconClose style={{ color: "var(--semi-color-danger)" }} />
-                ) : profileForm.username &&
-                  profileForm.username !== userInfo?.username ? (
-                  <IconTick style={{ color: "var(--semi-color-success)" }} />
-                ) : null
-              }
-            />
-            {profileErrors.username && (
-              <div
-                style={{
-                  color: "var(--semi-color-danger)",
-                  fontSize: 12,
-                  marginTop: 2,
-                }}
-              >
-                {profileErrors.username}
-              </div>
-            )}
-          </div>
-          <div>
-            <label className="form-label">{t("settings.displayName")}</label>
-            <Input
-              value={profileForm.display_name}
-              onChange={(v) => handleProfileFieldChange("display_name", v)}
-            />
-          </div>
-          <div>
-            <label className="form-label">{t("settings.email")}</label>
-            <Input
-              value={profileForm.email}
-              onChange={(v) => handleProfileFieldChange("email", v)}
-              suffix={
-                profileErrors.email ? (
-                  <IconClose style={{ color: "var(--semi-color-danger)" }} />
-                ) : profileForm.email &&
-                  profileForm.email !== (userInfo?.email || "") ? (
-                  <IconTick style={{ color: "var(--semi-color-success)" }} />
-                ) : null
-              }
-            />
-            {profileErrors.email && (
-              <div
-                style={{
-                  color: "var(--semi-color-danger)",
-                  fontSize: 12,
-                  marginTop: 2,
-                }}
-              >
-                {profileErrors.email}
-              </div>
-            )}
-          </div>
-        </div>
-      </Modal>
+      />
 
       <Modal
         title={t("settings.agentGuideTitle")}

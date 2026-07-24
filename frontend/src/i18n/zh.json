@@ -76,7 +76,10 @@
     "sortUpdated": "最近更新",
     "sortCreated": "最近创建",
     "sortTitle": "标题 (A-Z)",
-    "sortCount": "论文数量"
+    "sortCount": "论文数量",
+    "layout": "集合布局",
+    "gridView": "网格视图",
+    "listView": "列表视图"
   },
   "collection": {
     "loadFailed": "加载集合失败",
@@ -159,12 +162,22 @@
     "newPassword": "新密码",
     "newPasswordRequired": "请输入新密码",
     "confirmChange": "确认修改",
+    "cancel": "取消",
     "passwordChanged": "密码修改成功",
     "changeFailed": "修改失败",
-    "paperCount": "{{count}} 篇论文"
+    "paperCount": "{{count}} 篇论文",
+    "openCollection": "在新标签页打开「{{title}}」"
   },
   "admin": {
     "title": "用户管理",
+    "subtitle": "集中管理账户访问、登录凭据与内容归属。",
+    "summaryLabel": "用户概况",
+    "totalUsers": "总计",
+    "activeUsers": "已启用",
+    "directory": "用户目录",
+    "directoryCount": "{{count}} 个账户",
+    "searchUsers": "搜索用户",
+    "joined": "加入时间",
     "addUser": "添加用户",
     "loadFailed": "加载用户列表失败",
     "noUsers": "暂无用户",
@@ -210,7 +223,8 @@
     "userDeleted": "用户已删除",
     "deleteFailed": "删除失败",
     "confirmDelete": "确认删除",
-    "save": "保存"
+    "save": "保存",
+    "cancel": "取消"
   },
   "paperEdit": {
     "title": "编辑论文",
@@ -351,6 +365,7 @@
   },
   "settings": {
     "title": "设置",
+    "appearance": "外观",
     "language": "语言",
     "languageAuto": "跟随浏览器",
     "languageChinese": "中文",
@@ -434,6 +449,14 @@
   },
   "crawl": {
     "title": "爬取任务",
+    "subtitle": "定时发现新论文，并持续更新目标集合。",
+    "taskCount": "{{count}} 个任务",
+    "enabledCount": "{{count}} 个已启用",
+    "lastResult": "最近结果",
+    "basics": "任务信息",
+    "automation": "自动运行",
+    "destination": "目标位置",
+    "importBehavior": "导入方式",
     "newTask": "新建任务",
     "noTasks": "暂无爬取任务",
     "noTasksHint": "创建一个爬取任务来自动获取新论文",

@@ -24,10 +24,12 @@ import {
   IconExternalOpen,
   IconFilter,
   IconSort,
+  IconGridView,
+  IconListView,
 } from "@douyinfe/semi-icons";
 import client from "../api/client";
 import { usePolling } from "../hooks/usePolling";
-import "../styles/glass.css";
+import "../styles/surfaces.css";
 
 const { Text, Paragraph } = Typography;
 
@@ -53,11 +55,29 @@ const visibilityColors: Record<string, string> = {
   private: "grey",
   shared: "blue",
   public: "green",
+  public_editable: "green",
+};
+
+const visibilityLabels: Record<string, string> = {
+  private: "collectionEdit.private",
+  shared: "collectionEdit.shared",
+  public: "collectionEdit.public",
+  public_editable: "collectionEdit.publicEditable",
+};
+
+type CollectionLayout = "grid" | "list";
+
+const getInitialLayout = (): CollectionLayout => {
+  if (typeof window === "undefined") return "grid";
+  const saved = window.localStorage.getItem("sharebib-collection-layout");
+  if (saved === "grid" || saved === "list") return saved;
+  return window.innerWidth < 768 ? "list" : "grid";
 };
 
 export default function Home() {
   const [collections, setCollections] = useState<CollectionItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [layout, setLayout] = useState<CollectionLayout>(getInitialLayout);
   const [search, setSearch] = useState("");
   const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<
@@ -175,13 +195,18 @@ export default function Home() {
     setShowCreate(true);
   };
 
+  const changeLayout = (nextLayout: CollectionLayout) => {
+    setLayout(nextLayout);
+    window.localStorage.setItem("sharebib-collection-layout", nextLayout);
+  };
+
   if (loading)
     return (
       <Spin size="large" style={{ display: "block", margin: "100px auto" }} />
     );
 
   return (
-    <div>
+    <div className="home-page">
       <div className="home-header">
         <Typography.Title heading={4} style={{ margin: 0 }}>
           {t("home.myCollections")}
@@ -299,6 +324,32 @@ export default function Home() {
             {tagFilter}
           </Tag>
         )}
+        <div
+          className="layout-toggle"
+          role="group"
+          aria-label={t("home.layout")}
+        >
+          <button
+            type="button"
+            className={layout === "grid" ? "active" : ""}
+            onClick={() => changeLayout("grid")}
+            aria-label={t("home.gridView")}
+            aria-pressed={layout === "grid"}
+            title={t("home.gridView")}
+          >
+            <IconGridView aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            className={layout === "list" ? "active" : ""}
+            onClick={() => changeLayout("list")}
+            aria-label={t("home.listView")}
+            aria-pressed={layout === "list"}
+            title={t("home.listView")}
+          >
+            <IconListView aria-hidden="true" />
+          </button>
+        </div>
       </div>
       {sorted.length === 0 ? (
         <Empty
@@ -306,11 +357,13 @@ export default function Home() {
           style={{ marginTop: 80 }}
         />
       ) : (
-        <div className="collection-grid">
+        <div
+          className={`collection-grid${layout === "list" ? " collection-index" : ""}`}
+        >
           {sorted.map((c) => (
             <div key={c.id} onClick={() => navigate(`/collections/${c.id}`)}>
               <Card
-                className="collection-card glass-card"
+                className={`collection-card surface-card${layout === "list" ? " collection-index-card" : ""}`}
                 style={{ cursor: "pointer" }}
               >
                 <div className="collection-card-header">
@@ -321,7 +374,7 @@ export default function Home() {
                     color={(visibilityColors[c.visibility] || "grey") as any}
                     size="small"
                   >
-                    {c.visibility}
+                    {t(visibilityLabels[c.visibility] || c.visibility)}
                   </Tag>
                 </div>
                 {c.description && (

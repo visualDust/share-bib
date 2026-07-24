@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
-  Card,
   Tag,
   Empty,
   Spin,
@@ -28,9 +27,9 @@ import {
 } from "@douyinfe/semi-icons";
 import client from "../api/client";
 import SourceConfigForm from "../components/SourceConfigForm";
-import "../styles/glass.css";
+import "../styles/surfaces.css";
 
-const { Text, Paragraph } = Typography;
+const { Text } = Typography;
 
 interface SourceMeta {
   source_type: string;
@@ -216,11 +215,12 @@ export default function CrawlTasks() {
   }
 
   return (
-    <div>
-      <div className="home-header">
-        <Typography.Title heading={4} style={{ margin: 0 }}>
-          {t("crawl.title")}
-        </Typography.Title>
+    <div className="crawl-page">
+      <div className="crawl-page-header">
+        <div>
+          <Typography.Title heading={3}>{t("crawl.title")}</Typography.Title>
+          <Text>{t("crawl.subtitle")}</Text>
+        </div>
         <Button
           icon={<IconPlus />}
           theme="solid"
@@ -231,119 +231,139 @@ export default function CrawlTasks() {
       </div>
 
       {tasks.length === 0 ? (
-        <Empty
-          title={t("crawl.noTasks")}
-          description={t("crawl.noTasksHint")}
-          style={{ marginTop: 80 }}
-        />
+        <div className="crawl-empty-state">
+          <Empty
+            title={t("crawl.noTasks")}
+            description={t("crawl.noTasksHint")}
+          />
+        </div>
       ) : (
-        <div className="collection-grid">
+        <section className="crawl-task-list" aria-label={t("crawl.title")}>
+          <div className="crawl-task-list-header">
+            <span>{t("crawl.taskCount", { count: tasks.length })}</span>
+            <span>
+              {t("crawl.enabledCount", {
+                count: tasks.filter((task) => task.is_enabled).length,
+              })}
+            </span>
+          </div>
           {tasks.map((task) => {
             const sourceMeta = getSourceMeta(task.source_type);
             const colId = getTaskCollectionId(task);
             const colName = getCollectionName(colId);
             const isExpanded = expandedTask === task.id;
             const taskRuns = runs[task.id] || [];
+            const resultText = formatRunResult(task.last_run_result);
 
             return (
-              <div key={task.id}>
-                <Card
-                  className="collection-card glass-card"
-                  style={{ cursor: "default" }}
-                >
-                  <div className="collection-card-header">
-                    <Text strong style={{ fontSize: 16 }}>
-                      {task.name}
-                    </Text>
-                    <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
-                      <Tag
-                        color={task.is_enabled ? "green" : "grey"}
-                        size="small"
+              <article key={task.id} className="crawl-task-record">
+                <div className="crawl-task-main">
+                  <div className="crawl-task-heading">
+                    <div>
+                      <div className="crawl-task-kicker">
+                        <span>
+                          {sourceMeta?.display_name || task.source_type}
+                        </span>
+                        <span>{t(`crawl.${task.schedule_type}`)}</span>
+                      </div>
+                      <h2>{task.name}</h2>
+                    </div>
+                    <div className="crawl-task-statuses">
+                      <span
+                        className={`crawl-status ${task.is_enabled ? "is-success" : "is-muted"}`}
                       >
+                        <i aria-hidden="true" />
                         {task.is_enabled
                           ? t("crawl.status.enabled")
                           : t("crawl.status.disabled")}
-                      </Tag>
+                      </span>
                       {task.last_run_status && (
-                        <Tag
-                          color={statusColor(task.last_run_status)}
-                          size="small"
+                        <span
+                          className={`crawl-status is-${task.last_run_status}`}
                         >
+                          <i aria-hidden="true" />
                           {t(`crawl.status.${task.last_run_status}`)}
-                        </Tag>
+                        </span>
                       )}
                     </div>
                   </div>
 
-                  <div className="collection-card-meta">
-                    <Tag size="small" color="light-blue">
-                      {sourceMeta?.display_name || task.source_type}
-                    </Tag>
-                    <Tag size="small" color="light-blue">
-                      {t(`crawl.${task.schedule_type}`)}
-                    </Tag>
-                    {colId && (
-                      <Tag
-                        size="small"
-                        color="cyan"
-                        style={{ cursor: "pointer" }}
-                        onClick={() => navigate(`/collections/${colId}`)}
+                  <div className="crawl-task-facts">
+                    <div>
+                      <span>{t("crawl.targetMode")}</span>
+                      {colId ? (
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/collections/${colId}`)}
+                        >
+                          {colName || colId}
+                        </button>
+                      ) : (
+                        <strong>
+                          {task.new_collection_prefix || t("crawl.createNew")}
+                        </strong>
+                      )}
+                    </div>
+                    <div>
+                      <span>{t("crawl.lastRun")}</span>
+                      <strong>{formatDate(task.last_run_at)}</strong>
+                    </div>
+                    <div>
+                      <span>{t("crawl.nextRun")}</span>
+                      <strong>{formatDate(task.next_run_at)}</strong>
+                    </div>
+                    <div>
+                      <span>{t("crawl.lastResult")}</span>
+                      <strong
+                        className={
+                          task.last_run_result?.error ? "is-error" : ""
+                        }
                       >
-                        {colName || colId}
-                      </Tag>
-                    )}
+                        {task.last_run_result?.error ===
+                        "target_collection_deleted"
+                          ? t("crawl.targetDeleted")
+                          : resultText || "—"}
+                      </strong>
+                    </div>
                   </div>
 
-                  {task.last_run_result && !task.last_run_result.error && (
-                    <Paragraph
-                      type="tertiary"
-                      style={{ fontSize: 13, marginTop: 4 }}
-                    >
-                      {formatRunResult(task.last_run_result)}
-                    </Paragraph>
-                  )}
-                  {task.last_run_result?.error ===
-                    "target_collection_deleted" && (
-                    <Tag color="red" size="small" style={{ marginTop: 4 }}>
-                      {t("crawl.targetDeleted")}
-                    </Tag>
-                  )}
-
-                  <div className="collection-card-footer">
-                    <Text type="tertiary" size="small">
-                      {t("crawl.lastRun")}: {formatDate(task.last_run_at)}
-                    </Text>
-                    <div style={{ display: "flex", gap: 2 }}>
+                  <div className="crawl-task-toolbar">
+                    <div className="crawl-task-actions">
                       <Button
                         icon={<IconPlay />}
                         size="small"
-                        theme="borderless"
-                        type="tertiary"
-                        style={{ padding: 2, height: "auto" }}
+                        theme="light"
                         onClick={() => handleRunNow(task)}
-                      />
+                      >
+                        {t("crawl.runNow")}
+                      </Button>
                       <Button
                         icon={<IconEdit />}
                         size="small"
                         theme="borderless"
                         type="tertiary"
-                        style={{ padding: 2, height: "auto" }}
                         onClick={() => setEditTask(task)}
-                      />
+                      >
+                        {t("crawl.edit")}
+                      </Button>
                       <Button
                         icon={task.is_enabled ? <IconClose /> : <IconTick />}
                         size="small"
                         theme="borderless"
-                        type="tertiary"
-                        style={{ padding: 2, height: "auto" }}
+                        type={task.is_enabled ? "warning" : "primary"}
                         onClick={() => handleToggle(task)}
-                      />
+                      >
+                        {task.is_enabled
+                          ? t("crawl.disable")
+                          : t("crawl.enable")}
+                      </Button>
                       <Button
                         icon={<IconDelete />}
                         size="small"
                         theme="borderless"
                         type="danger"
-                        style={{ padding: 2, height: "auto" }}
+                        aria-label={`${t("crawl.delete")} ${task.name}`}
+                        title={`${t("crawl.delete")} ${task.name}`}
                         onClick={() =>
                           Modal.confirm({
                             title: t("crawl.deleteConfirm", {
@@ -354,117 +374,58 @@ export default function CrawlTasks() {
                         }
                       />
                     </div>
-                  </div>
-
-                  {/* Run history toggle */}
-                  <div
-                    style={{
-                      textAlign: "center",
-                      marginTop: 8,
-                      cursor: "pointer",
-                      color: "var(--semi-color-text-2)",
-                      fontSize: 13,
-                    }}
-                    onClick={() => toggleExpand(task.id)}
-                  >
-                    {isExpanded ? (
-                      <IconChevronUp size="small" />
-                    ) : (
-                      <IconChevronDown size="small" />
-                    )}
-                    <span style={{ marginLeft: 4 }}>
-                      {t("crawl.runHistory")}
-                    </span>
-                  </div>
-                  <Collapsible isOpen={isExpanded}>
-                    <div
-                      style={{
-                        marginTop: 8,
-                        maxHeight: 200,
-                        overflowY: "auto",
-                      }}
+                    <button
+                      className="crawl-history-toggle"
+                      type="button"
+                      aria-expanded={isExpanded}
+                      onClick={() => toggleExpand(task.id)}
                     >
-                      {taskRuns.length === 0 ? (
-                        <Text type="tertiary" size="small">
-                          {t("crawl.noRuns")}
-                        </Text>
+                      {t("crawl.runHistory")}
+                      {isExpanded ? (
+                        <IconChevronUp size="small" />
                       ) : (
-                        <div
-                          style={{
-                            display: "flex",
-                            flexDirection: "column",
-                            gap: 6,
-                          }}
-                        >
-                          {taskRuns.map((run) => (
-                            <div
-                              key={run.id}
-                              style={{
-                                display: "flex",
-                                justifyContent: "space-between",
-                                alignItems: "center",
-                                fontSize: 12,
-                                padding: "4px 0",
-                                borderBottom:
-                                  "1px solid var(--semi-color-border)",
-                              }}
-                            >
-                              <div
-                                style={{
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: 6,
-                                }}
-                              >
-                                <Tag
-                                  color={statusColor(run.status)}
-                                  size="small"
-                                >
-                                  {run.status}
-                                </Tag>
-                                <span
-                                  style={{ color: "var(--semi-color-text-2)" }}
-                                >
-                                  {formatRunResult(run.result)}
-                                </span>
-                              </div>
-                              <div
-                                style={{
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: 8,
-                                  color: "var(--semi-color-text-2)",
-                                }}
-                              >
-                                {run.collection_id && (
-                                  <span
-                                    style={{
-                                      cursor: "pointer",
-                                      color: "var(--semi-color-link)",
-                                    }}
-                                    onClick={() =>
-                                      navigate(
-                                        `/collections/${run.collection_id}`,
-                                      )
-                                    }
-                                  >
-                                    {getCollectionName(run.collection_id) ||
-                                      run.collection_id}
-                                  </span>
-                                )}
-                                <span>{formatDate(run.started_at)}</span>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
+                        <IconChevronDown size="small" />
                       )}
-                    </div>
-                  </Collapsible>
-                </Card>
-              </div>
+                    </button>
+                  </div>
+                </div>
+
+                <Collapsible isOpen={isExpanded}>
+                  <div className="crawl-run-history">
+                    {taskRuns.length === 0 ? (
+                      <Text type="tertiary" size="small">
+                        {t("crawl.noRuns")}
+                      </Text>
+                    ) : (
+                      taskRuns.map((run) => (
+                        <div key={run.id} className="crawl-run-row">
+                          <Tag color={statusColor(run.status)} size="small">
+                            {run.status}
+                          </Tag>
+                          <span>{formatRunResult(run.result) || "—"}</span>
+                          {run.collection_id ? (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                navigate(`/collections/${run.collection_id}`)
+                              }
+                            >
+                              {getCollectionName(run.collection_id) ||
+                                run.collection_id}
+                            </button>
+                          ) : (
+                            <span />
+                          )}
+                          <time>{formatDate(run.started_at)}</time>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </Collapsible>
+              </article>
             );
           })}
-        </div>
+        </section>
       )}
 
       <TaskFormModal
@@ -593,12 +554,15 @@ function TaskFormModal({
 
   return (
     <Modal
+      className="task-form-dialog"
       title={isEdit ? t("crawl.editTitle") : t("crawl.createTitle")}
       visible={visible}
       onCancel={onClose}
       footer={
-        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-          <Button onClick={onClose}>{t("crawl.cancel")}</Button>
+        <div className="task-form-actions">
+          <Button theme="borderless" onClick={onClose}>
+            {t("crawl.cancel")}
+          </Button>
           <Button theme="solid" loading={submitting} onClick={handleSubmit}>
             {isEdit ? t("crawl.save") : t("crawl.create")}
           </Button>
@@ -607,132 +571,130 @@ function TaskFormModal({
       fullScreen={isMobile}
       width={isMobile ? undefined : 560}
       closeOnEsc
-      bodyStyle={{ overflow: "auto" }}
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-        {/* Task name */}
-        <div>
-          <div style={{ marginBottom: 4, fontWeight: 500 }}>
-            {t("crawl.taskName")}
-          </div>
-          <Input
-            value={name}
-            onChange={setName}
-            placeholder={t("crawl.taskNamePlaceholder")}
-          />
-        </div>
-
-        {/* Source selection */}
-        {!isEdit && (
-          <div>
-            <div style={{ marginBottom: 4, fontWeight: 500 }}>
-              {t("crawl.selectSource")}
+      <div className="task-form">
+        <section className="task-form-section">
+          <h3>{t("crawl.basics")}</h3>
+          <div className="task-form-fields">
+            <div>
+              <label className="form-label">{t("crawl.taskName")}</label>
+              <Input
+                value={name}
+                onChange={setName}
+                placeholder={t("crawl.taskNamePlaceholder")}
+              />
             </div>
-            <Select
-              style={{ width: "100%" }}
-              value={sourceType}
-              onChange={(val) => {
-                setSourceType(val as string);
-                setSourceConfig({});
-              }}
-              optionList={sources.map((s) => ({
-                value: s.source_type,
-                label: s.display_name,
-              }))}
-            />
-          </div>
-        )}
 
-        {/* Source config */}
-        {selectedSource && selectedSource.config_fields.length > 0 && (
+            {!isEdit && (
+              <div>
+                <label className="form-label">{t("crawl.selectSource")}</label>
+                <Select
+                  value={sourceType}
+                  onChange={(val) => {
+                    setSourceType(val as string);
+                    setSourceConfig({});
+                  }}
+                  optionList={sources.map((s) => ({
+                    value: s.source_type,
+                    label: s.display_name,
+                  }))}
+                />
+              </div>
+            )}
+
+            {selectedSource && selectedSource.config_fields.length > 0 && (
+              <div>
+                <label className="form-label">{t("crawl.configSource")}</label>
+                <SourceConfigForm
+                  fields={selectedSource.config_fields}
+                  value={sourceConfig}
+                  onChange={setSourceConfig}
+                />
+              </div>
+            )}
+          </div>
+        </section>
+
+        <section className="task-form-section">
+          <h3>{t("crawl.automation")}</h3>
           <div>
-            <div style={{ marginBottom: 4, fontWeight: 500 }}>
-              {t("crawl.configSource")}
+            <label className="form-label">{t("crawl.schedule")}</label>
+            <RadioGroup
+              className="task-choice-group"
+              value={scheduleType}
+              onChange={(e) => setScheduleType(e.target.value)}
+              direction="horizontal"
+            >
+              <Radio value="once">{t("crawl.once")}</Radio>
+              <Radio value="daily">{t("crawl.daily")}</Radio>
+              <Radio value="weekly">{t("crawl.weekly")}</Radio>
+              <Radio value="monthly">{t("crawl.monthly")}</Radio>
+            </RadioGroup>
+          </div>
+        </section>
+
+        <section className="task-form-section">
+          <h3>{t("crawl.destination")}</h3>
+          <div className="task-form-fields">
+            <div>
+              <label className="form-label">{t("crawl.targetMode")}</label>
+              <RadioGroup
+                className="task-choice-group is-vertical"
+                value={targetMode}
+                onChange={(e) => setTargetMode(e.target.value)}
+              >
+                <Radio value="append">{t("crawl.append")}</Radio>
+                <Radio value="create_new">{t("crawl.createNew")}</Radio>
+              </RadioGroup>
             </div>
-            <SourceConfigForm
-              fields={selectedSource.config_fields}
-              value={sourceConfig}
-              onChange={setSourceConfig}
-            />
-          </div>
-        )}
 
-        {/* Schedule */}
-        <div>
-          <div style={{ marginBottom: 4, fontWeight: 500 }}>
-            {t("crawl.schedule")}
-          </div>
-          <RadioGroup
-            value={scheduleType}
-            onChange={(e) => setScheduleType(e.target.value)}
-            direction="horizontal"
-          >
-            <Radio value="once">{t("crawl.once")}</Radio>
-            <Radio value="daily">{t("crawl.daily")}</Radio>
-            <Radio value="weekly">{t("crawl.weekly")}</Radio>
-            <Radio value="monthly">{t("crawl.monthly")}</Radio>
-          </RadioGroup>
-        </div>
+            {targetMode === "append" && (
+              <div>
+                <label className="form-label">
+                  {t("crawl.selectCollection")}
+                </label>
+                <Select
+                  value={targetCollectionId}
+                  onChange={(val) => setTargetCollectionId(val as string)}
+                  optionList={collections.map((c) => ({
+                    value: c.id,
+                    label: c.title,
+                  }))}
+                  filter
+                />
+              </div>
+            )}
 
-        {/* Target mode */}
-        <div>
-          <div style={{ marginBottom: 4, fontWeight: 500 }}>
-            {t("crawl.targetMode")}
+            {targetMode === "create_new" && (
+              <div>
+                <label className="form-label">
+                  {t("crawl.collectionPrefix")}
+                </label>
+                <Input
+                  value={newCollectionPrefix}
+                  onChange={setNewCollectionPrefix}
+                  placeholder={t("crawl.collectionPrefixPlaceholder")}
+                />
+              </div>
+            )}
           </div>
-          <RadioGroup
-            value={targetMode}
-            onChange={(e) => setTargetMode(e.target.value)}
-          >
-            <Radio value="append">{t("crawl.append")}</Radio>
-            <Radio value="create_new">{t("crawl.createNew")}</Radio>
-          </RadioGroup>
-        </div>
+        </section>
 
-        {targetMode === "append" && (
+        <section className="task-form-section">
+          <h3>{t("crawl.importBehavior")}</h3>
           <div>
-            <div style={{ marginBottom: 4, fontWeight: 500 }}>
-              {t("crawl.selectCollection")}
-            </div>
-            <Select
-              style={{ width: "100%" }}
-              value={targetCollectionId}
-              onChange={(val) => setTargetCollectionId(val as string)}
-              optionList={collections.map((c) => ({
-                value: c.id,
-                label: c.title,
-              }))}
-              filter
-            />
+            <label className="form-label">{t("crawl.duplicateStrategy")}</label>
+            <RadioGroup
+              className="task-choice-group"
+              value={duplicateStrategy}
+              onChange={(e) => setDuplicateStrategy(e.target.value)}
+              direction="horizontal"
+            >
+              <Radio value="skip">{t("crawl.skip")}</Radio>
+              <Radio value="update">{t("crawl.update")}</Radio>
+            </RadioGroup>
           </div>
-        )}
-
-        {targetMode === "create_new" && (
-          <div>
-            <div style={{ marginBottom: 4, fontWeight: 500 }}>
-              {t("crawl.collectionPrefix")}
-            </div>
-            <Input
-              value={newCollectionPrefix}
-              onChange={setNewCollectionPrefix}
-              placeholder={t("crawl.collectionPrefixPlaceholder")}
-            />
-          </div>
-        )}
-
-        {/* Duplicate strategy */}
-        <div>
-          <div style={{ marginBottom: 4, fontWeight: 500 }}>
-            {t("crawl.duplicateStrategy")}
-          </div>
-          <RadioGroup
-            value={duplicateStrategy}
-            onChange={(e) => setDuplicateStrategy(e.target.value)}
-            direction="horizontal"
-          >
-            <Radio value="skip">{t("crawl.skip")}</Radio>
-            <Radio value="update">{t("crawl.update")}</Radio>
-          </RadioGroup>
-        </div>
+        </section>
       </div>
     </Modal>
   );

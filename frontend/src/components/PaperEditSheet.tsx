@@ -11,7 +11,7 @@ import {
   Select,
 } from "@douyinfe/semi-ui-19";
 import client from "../api/client";
-import "../styles/glass.css";
+import "../styles/surfaces.css";
 import "../index.css";
 
 const { Title } = Typography;
@@ -107,12 +107,12 @@ export default function PaperEditSheet({
 
   return (
     <SideSheet
+      className="editor-sidesheet"
       title={<Title heading={5}>{t("paperEdit.title")}</Title>}
       visible={visible}
       onCancel={onClose}
       footer={footer}
-      size={mobile ? "large" : "medium"}
-      width={mobile ? "100vw" : undefined}
+      width={mobile ? "100vw" : 600}
       headerStyle={{ borderBottom: "1px solid var(--semi-color-border)" }}
       bodyStyle={{ borderBottom: "1px solid var(--semi-color-border)" }}
     >

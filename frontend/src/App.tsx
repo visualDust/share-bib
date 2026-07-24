@@ -1,6 +1,9 @@
 import { useState, useEffect, createContext, useContext } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
-import { Spin } from "@douyinfe/semi-ui-19";
+import { useTranslation } from "react-i18next";
+import { LocaleProvider, Spin } from "@douyinfe/semi-ui-19";
+import enGB from "@douyinfe/semi-ui-19/lib/es/locale/source/en_GB";
+import zhCN from "@douyinfe/semi-ui-19/lib/es/locale/source/zh_CN";
 import Login from "./pages/Login";
 import Setup from "./pages/Setup";
 import Home from "./pages/Home";
@@ -53,6 +56,7 @@ function LegacyCollectionRedirect() {
 }
 
 export default function App() {
+  const { i18n } = useTranslation();
   const [status, setStatus] = useState<SystemStatus | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -96,57 +100,65 @@ export default function App() {
   }
 
   return (
-    <SystemContext.Provider value={{ status, setStatus }}>
-      <Routes>
-        <Route
-          path="/setup"
-          element={
-            status?.initialized ? <Navigate to="/" replace /> : <Setup />
-          }
-        />
-        <Route
-          path="/login"
-          element={
-            !status?.initialized ? <Navigate to="/setup" replace /> : <Login />
-          }
-        />
-        {/* Public collection view - accessible without login */}
-        <Route
-          path="/collections/:id"
-          element={
-            !status?.initialized ? (
-              <Navigate to="/setup" replace />
-            ) : (
-              <AppLayout>
-                <CollectionDetail />
-              </AppLayout>
-            )
-          }
-        />
-        {/* Redirect legacy IDs that accidentally contained a slash. */}
-        <Route path="/collections/*" element={<LegacyCollectionRedirect />} />
-        <Route
-          path="/*"
-          element={
-            !status?.initialized ? (
-              <Navigate to="/setup" replace />
-            ) : (
-              <PrivateRoute>
+    <LocaleProvider
+      locale={i18n.resolvedLanguage?.startsWith("zh") ? zhCN : enGB}
+    >
+      <SystemContext.Provider value={{ status, setStatus }}>
+        <Routes>
+          <Route
+            path="/setup"
+            element={
+              status?.initialized ? <Navigate to="/" replace /> : <Setup />
+            }
+          />
+          <Route
+            path="/login"
+            element={
+              !status?.initialized ? (
+                <Navigate to="/setup" replace />
+              ) : (
+                <Login />
+              )
+            }
+          />
+          {/* Public collection view - accessible without login */}
+          <Route
+            path="/collections/:id"
+            element={
+              !status?.initialized ? (
+                <Navigate to="/setup" replace />
+              ) : (
                 <AppLayout>
-                  <Routes>
-                    <Route path="/" element={<Home />} />
-                    <Route path="/import" element={<Import />} />
-                    <Route path="/crawl-tasks" element={<CrawlTasks />} />
-                    <Route path="/user/:username" element={<UserProfile />} />
-                    <Route path="/admin" element={<Admin />} />
-                    <Route path="/settings" element={<Settings />} />
-                  </Routes>
+                  <CollectionDetail />
                 </AppLayout>
-              </PrivateRoute>
-            )
-          }
-        />
-      </Routes>
-    </SystemContext.Provider>
+              )
+            }
+          />
+          {/* Redirect legacy IDs that accidentally contained a slash. */}
+          <Route path="/collections/*" element={<LegacyCollectionRedirect />} />
+          <Route
+            path="/*"
+            element={
+              !status?.initialized ? (
+                <Navigate to="/setup" replace />
+              ) : (
+                <PrivateRoute>
+                  <AppLayout>
+                    <Routes>
+                      <Route path="/" element={<Home />} />
+                      <Route path="/import" element={<Import />} />
+                      <Route path="/crawl-tasks" element={<CrawlTasks />} />
+                      <Route path="/user/:username" element={<UserProfile />} />
+                      <Route path="/admin" element={<Admin />} />
+                      <Route path="/settings" element={<Settings />} />
+                    </Routes>
+                  </AppLayout>
+                </PrivateRoute>
+              )
+            }
+          />
+        </Routes>
+      </SystemContext.Provider>
+    </LocaleProvider>
   );
 }

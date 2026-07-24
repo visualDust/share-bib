@@ -1,0 +1,112 @@
+/* Flat document surfaces shared across pages. */
+.surface-card.semi-card {
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface);
+  box-shadow: none;
+  overflow: hidden;
+}
+
+.surface-card.semi-card .semi-card-body {
+  padding: 22px 24px;
+}
+
+.auth-card.semi-card {
+  width: min(100%, 420px);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface);
+  box-shadow: 0 18px 50px rgb(31 39 35 / 0.06);
+}
+
+[theme-mode="dark"] .auth-card.semi-card {
+  box-shadow: 0 18px 50px rgb(0 0 0 / 0.18);
+}
+
+.data-list {
+  overflow: hidden;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface);
+}
+
+.data-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 46px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--ui-border);
+  background: var(--ui-surface-subtle);
+  color: var(--ui-text-muted);
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.data-list-body .paper-item {
+  padding: 20px;
+  border-bottom: 1px solid var(--ui-border-soft);
+  transition: background-color 160ms ease;
+}
+
+.data-list-body .paper-item:last-child {
+  border-bottom: 0;
+}
+
+.data-list-body .paper-item:hover {
+  background: var(--ui-surface-hover);
+}
+
+/* Semi Table instances used by admin and duplicate-review screens. */
+.data-table .semi-table-wrapper,
+.semi-table-wrapper {
+  border-radius: var(--ui-radius-lg);
+  border-color: var(--ui-border);
+  background: var(--ui-surface);
+  box-shadow: none;
+}
+
+.data-table .semi-table-thead > .semi-table-row > .semi-table-row-head,
+.semi-table-thead > .semi-table-row > .semi-table-row-head {
+  border-bottom-color: var(--ui-border);
+  background: var(--ui-surface-subtle);
+  color: var(--ui-text-muted);
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.025em;
+}
+
+.data-table .semi-table-tbody > .semi-table-row > .semi-table-row-cell,
+.semi-table-tbody > .semi-table-row > .semi-table-row-cell {
+  border-bottom-color: var(--ui-border-soft);
+  background: var(--ui-surface);
+}
+
+.data-table .semi-table-tbody > .semi-table-row:hover > .semi-table-row-cell,
+.semi-table-tbody > .semi-table-row:hover > .semi-table-row-cell {
+  background: var(--ui-surface-hover);
+  background-image: none;
+}
+
+.data-table .semi-table-pagination-outer,
+.semi-table-pagination-outer {
+  padding: 14px 16px;
+  background: var(--ui-surface);
+}
+
+@media (max-width: 768px) {
+  .surface-card.semi-card .semi-card-body {
+    padding: 18px;
+  }
+
+  .data-list-header {
+    min-height: 42px;
+    padding: 0 16px;
+  }
+
+  .data-list-body .paper-item {
+    padding: 18px 16px;
+  }
+}

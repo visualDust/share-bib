@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
 import { Switch } from "@douyinfe/semi-ui-19";
+import { IconMoon, IconSun } from "@douyinfe/semi-icons";
 import { ThemeContext, useTheme } from "../hooks/useTheme";
 import { flushSync } from "react-dom";
 
@@ -13,8 +14,8 @@ export function SwitchColorMode() {
       onChange={(val, e) =>
         setDarkMode(val, e.nativeEvent as unknown as React.MouseEvent)
       }
-      checkedText="🌚"
-      uncheckedText="😎"
+      checkedText={<IconMoon size="small" />}
+      uncheckedText={<IconSun size="small" />}
       aria-label="Toggle theme"
     />
   );
